@@ -168,10 +168,11 @@ export async function createExpense(projectId: string, formData: FormData) {
     type: String(formData.get("type") ?? "ads"),
     category: String(formData.get("category") ?? "") || null,
     amount,
-    currency: String(formData.get("currency") ?? "BRL"),
+    currency: normalizeCurrency(String(formData.get("currency") ?? "BRL")),
     description: String(formData.get("description") ?? "") || null,
     spent_at: String(formData.get("spent_at") ?? new Date().toISOString().slice(0, 10)),
     recurring: formData.get("recurring") === "on",
+    ad_account_id: String(formData.get("ad_account_id") ?? "") || null,
     created_by: profile?.id ?? null,
   })
   if (error) return { error: error.message }
@@ -613,17 +614,33 @@ export async function createCashEntry(formData: FormData) {
   if (amount <= 0) return { error: "Informe um valor." }
   const direction = String(formData.get("direction") ?? "entrada")
   const projectId = String(formData.get("project_id") ?? "") || null
+  const bankAccountId = String(formData.get("bank_account_id") ?? "") || null
+  const toDashboard = checkbox(formData, "to_dashboard")
+  const dashboardKind = toDashboard
+    ? direction === "saida"
+      ? String(formData.get("dashboard_kind") ?? "gasto")
+      : "faturamento"
+    : null
+
   const { error } = await supabase.from("cash_entries").insert({
     owner_id: profile.id,
     project_id: projectId,
     direction,
     amount,
+    currency: normalizeCurrency(String(formData.get("currency") ?? "BRL")),
     category: String(formData.get("category") ?? "") || null,
     description: String(formData.get("description") ?? "") || null,
     occurred_at: String(formData.get("occurred_at") ?? new Date().toISOString().slice(0, 10)),
+    bank_account_id: bankAccountId,
+    to_dashboard: toDashboard,
+    dashboard_kind: dashboardKind,
     created_by: profile.id,
   })
   if (error) return { error: error.message }
+
+  // Reflete no saldo da conta bancária, quando vinculada.
+  if (bankAccountId) await applyBankDelta(supabase, bankAccountId, direction === "saida" ? -amount : amount)
+
   await logActivity({
     actor: profile,
     action: "create",
@@ -632,12 +649,154 @@ export async function createCashEntry(formData: FormData) {
     summary: `${direction === "saida" ? "Retirada" : "Entrada"} no caixa de ${amount.toFixed(2)}`,
   })
   revalidatePath("/caixa")
+  if (projectId) revalidatePath(`/projetos/${projectId}`)
+  if (toDashboard) revalidatePath("/")
   return { ok: true }
 }
 
 export async function deleteCashEntry(id: string) {
   const supabase = await createClient()
-  await supabase.from("cash_entries").delete().eq("id", id)
+  const { data: entry } = await supabase.from("cash_entries").select("*").eq("id", id).maybeSingle()
+  // Se fizer parte de uma transferência, remove as duas pernas e desfaz saldos.
+  if (entry?.transfer_group) {
+    const { data: legs } = await supabase
+      .from("cash_entries")
+      .select("*")
+      .eq("transfer_group", entry.transfer_group)
+    for (const leg of legs ?? []) {
+      if (leg.bank_account_id)
+        await applyBankDelta(supabase, leg.bank_account_id, leg.direction === "saida" ? leg.amount : -leg.amount)
+    }
+    await supabase.from("cash_entries").delete().eq("transfer_group", entry.transfer_group)
+  } else {
+    if (entry?.bank_account_id)
+      await applyBankDelta(supabase, entry.bank_account_id, entry.direction === "saida" ? entry.amount : -entry.amount)
+    await supabase.from("cash_entries").delete().eq("id", id)
+  }
+  revalidatePath("/caixa")
+  if (entry?.project_id) revalidatePath(`/projetos/${entry.project_id}`)
+  return { ok: true }
+}
+
+/**
+ * Transferência entre caixas: pessoal → projeto, projeto → pessoal, ou sócio → sócio.
+ * Cria as duas pernas (saída de uma origem, entrada em um destino) com o mesmo transfer_group.
+ */
+export async function transferCash(formData: FormData) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: "Não autenticado." }
+  const amount = num(formData.get("amount"))
+  if (amount <= 0) return { error: "Informe um valor." }
+
+  const fromProject = String(formData.get("from_project_id") ?? "") || null
+  const toProject = String(formData.get("to_project_id") ?? "") || null
+  const toUser = String(formData.get("to_user_id") ?? "") || profile.id
+  const bankAccountId = String(formData.get("bank_account_id") ?? "") || null
+  const occurredAt = String(formData.get("occurred_at") ?? new Date().toISOString().slice(0, 10))
+  const currency = normalizeCurrency(String(formData.get("currency") ?? "BRL"))
+  const group = crypto.randomUUID()
+  const desc = String(formData.get("description") ?? "") || "Transferência"
+
+  // Perna de SAÍDA (origem = quem envia)
+  const outRow = {
+    owner_id: profile.id,
+    project_id: fromProject,
+    direction: "saida" as const,
+    amount,
+    currency,
+    category: "transferência",
+    description: desc,
+    occurred_at: occurredAt,
+    bank_account_id: fromProject ? null : bankAccountId,
+    transfer_group: group,
+    counterparty_id: toUser,
+    to_dashboard: false,
+    dashboard_kind: null,
+    created_by: profile.id,
+  }
+  // Perna de ENTRADA (destino = quem recebe)
+  const inRow = {
+    owner_id: toUser,
+    project_id: toProject,
+    direction: "entrada" as const,
+    amount,
+    currency,
+    category: "transferência",
+    description: desc,
+    occurred_at: occurredAt,
+    bank_account_id: toProject ? null : bankAccountId,
+    transfer_group: group,
+    counterparty_id: profile.id,
+    to_dashboard: false,
+    dashboard_kind: null,
+    created_by: profile.id,
+  }
+
+  const { error } = await supabase.from("cash_entries").insert([outRow, inRow])
+  if (error) return { error: error.message }
+
+  // Ajusta saldo da conta bancária: sai se origem pessoal, entra se destino pessoal.
+  if (bankAccountId) {
+    if (!fromProject) await applyBankDelta(supabase, bankAccountId, -amount)
+    if (!toProject) await applyBankDelta(supabase, bankAccountId, amount)
+  }
+
+  await logActivity({
+    actor: profile,
+    action: "create",
+    entity: "transfer",
+    projectId: fromProject ?? toProject,
+    summary: `Transferiu ${amount.toFixed(2)}`,
+  })
+  revalidatePath("/caixa")
+  if (fromProject) revalidatePath(`/projetos/${fromProject}`)
+  if (toProject) revalidatePath(`/projetos/${toProject}`)
+  return { ok: true }
+}
+
+/* ---------- Contas bancárias (gestor financeiro pessoal) ---------- */
+async function applyBankDelta(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  bankAccountId: string,
+  delta: number,
+) {
+  const { data: acc } = await supabase
+    .from("bank_accounts")
+    .select("balance")
+    .eq("id", bankAccountId)
+    .maybeSingle()
+  if (!acc) return
+  await supabase
+    .from("bank_accounts")
+    .update({ balance: Number(acc.balance) + delta })
+    .eq("id", bankAccountId)
+}
+
+export async function saveBankAccount(formData: FormData) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: "Não autenticado." }
+  const id = String(formData.get("id") ?? "")
+  const name = String(formData.get("name") ?? "").trim()
+  if (!name) return { error: "Informe o nome da conta." }
+  const payload = {
+    name,
+    kind: String(formData.get("kind") ?? "banco"),
+    balance: num(formData.get("balance")),
+    currency: normalizeCurrency(String(formData.get("currency") ?? "BRL")),
+  }
+  const { error } = id
+    ? await supabase.from("bank_accounts").update(payload).eq("id", id)
+    : await supabase.from("bank_accounts").insert({ ...payload, owner_id: profile.id })
+  if (error) return { error: error.message }
+  revalidatePath("/caixa")
+  return { ok: true }
+}
+
+export async function deleteBankAccount(id: string) {
+  const supabase = await createClient()
+  await supabase.from("bank_accounts").delete().eq("id", id)
   revalidatePath("/caixa")
   return { ok: true }
 }

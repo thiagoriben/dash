@@ -55,6 +55,7 @@ export async function createUser(
     full_name: fullName || null,
     phone: phone || null,
     role,
+    approved: true,
   })
   if (pErr) return { error: "Usuário criado, mas falhou ao salvar o perfil." }
 
@@ -75,4 +76,24 @@ export async function deleteUser(userId: string) {
   const admin = createAdminClient()
   await admin.auth.admin.deleteUser(userId)
   revalidatePath("/usuarios")
+}
+
+/* ---------- Aprovação de contas ---------- */
+export async function approveUser(userId: string) {
+  await requireAdmin()
+  const supabase = await createClient()
+  await supabase.from("profiles").update({ approved: true }).eq("id", userId)
+  revalidatePath("/usuarios")
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+export async function rejectUser(userId: string) {
+  const me = await requireAdmin()
+  if (me.id === userId) return { error: "Você não pode rejeitar a si mesmo." }
+  const admin = createAdminClient()
+  await admin.auth.admin.deleteUser(userId)
+  revalidatePath("/usuarios")
+  revalidatePath("/", "layout")
+  return { ok: true }
 }

@@ -82,6 +82,17 @@ export async function getProfiles(): Promise<Profile[]> {
   return (data ?? []) as Profile[]
 }
 
+/** Contas aguardando aprovação (visível só para admin via RLS). */
+export async function getPendingProfiles(): Promise<Profile[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("approved", false)
+    .order("created_at")
+  return (data ?? []) as Profile[]
+}
+
 /**
  * Projetos visíveis para o usuário. O RLS já restringe as linhas retornadas
  * aos projetos que o usuário criou OU nos quais é colaborador (project_members),

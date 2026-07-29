@@ -7,6 +7,7 @@ export type Profile = {
   full_name: string | null
   phone: string | null
   role: "admin" | "member"
+  approved: boolean
   prefs: Prefs | null
   created_at: string
 }
@@ -37,7 +38,28 @@ export type Prefs = {
   offer_types?: string[]
   sources?: string[]
   sidebar_collapsed?: boolean
+  /** % extra somada ao gasto de ads para estimar o total com impostos da Meta. */
+  meta_tax_pct?: number
+  /** Como exibir o gasto na dashboard. */
+  spend_view?: SpendView
+  /** Base do cálculo de lucro. */
+  profit_base?: ProfitBase
+  /** Configuração dos widgets/KPIs da dashboard principal. */
+  dash_widgets?: string[]
+  /** Configuração dos widgets/KPIs da dashboard de projeto. */
+  project_widgets?: string[]
 }
+
+/** Como o gasto aparece na dashboard. */
+export type SpendView =
+  | "ads" // só gasto com anúncios
+  | "card" // total cobrado no cartão
+  | "combined" // gasto já com a cobrança (total)
+  | "ads_tax" // ads + imposto discreto ao lado
+  | "card_tax" // cobrança total + imposto discreto
+
+/** Base do lucro. */
+export type ProfitBase = "ads" | "card"
 
 export type Expense = {
   id: string
@@ -49,6 +71,7 @@ export type Expense = {
   description: string | null
   spent_at: string
   recurring: boolean
+  ad_account_id: string | null
   created_by: string | null
   created_at: string
 }
@@ -184,10 +207,30 @@ export type CashEntry = {
   project_id: string | null
   direction: "entrada" | "saida"
   amount: number
+  currency: Currency
   category: string | null
   description: string | null
   occurred_at: string
   sale_id: string | null
+  bank_account_id: string | null
+  /** Agrupa as 2 pernas de uma transferência (saída + entrada). */
+  transfer_group: string | null
+  /** Contraparte da transferência (outro usuário/sócio). */
+  counterparty_id: string | null
+  /** Se a saída/entrada deve refletir na dashboard como gasto/faturamento. */
+  to_dashboard: boolean
+  dashboard_kind: "gasto" | "faturamento" | null
   created_by: string | null
+  created_at: string
+}
+
+/** Conta bancária/carteira do gestor financeiro pessoal. */
+export type BankAccount = {
+  id: string
+  owner_id: string
+  name: string
+  kind: string
+  balance: number
+  currency: Currency
   created_at: string
 }
