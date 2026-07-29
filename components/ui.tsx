@@ -125,7 +125,15 @@ export function Field({
 }
 
 /* ---------- Badge ---------- */
-type BadgeTone = "default" | "primary" | "positive" | "negative" | "warning" | "secondary"
+type BadgeTone =
+  | "default"
+  | "primary"
+  | "positive"
+  | "negative"
+  | "warning"
+  | "secondary"
+  | "success"
+  | "danger"
 const badgeTones: Record<BadgeTone, string> = {
   default: "bg-white/5 text-muted border-white/10",
   primary: "bg-primary/10 text-primary border-primary/30",
@@ -133,6 +141,8 @@ const badgeTones: Record<BadgeTone, string> = {
   negative: "bg-negative/10 text-negative border-negative/30",
   warning: "bg-warning/10 text-warning border-warning/30",
   secondary: "bg-secondary/10 text-secondary border-secondary/30",
+  success: "bg-positive/10 text-positive border-positive/30",
+  danger: "bg-negative/10 text-negative border-negative/30",
 }
 export function Badge({
   tone = "default",

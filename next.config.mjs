@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: { ignoreDuringBuilds: true },
+  turbopack: { root: import.meta.dirname },
   typescript: { ignoreBuildErrors: true },
   async headers() {
     return [

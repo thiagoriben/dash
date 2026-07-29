@@ -15,6 +15,14 @@
   --color-negative: #ff5c7c;
   --color-warning: #ffb454;
 
+  /* aliases usados na UI */
+  --color-success: #34e4a0;
+  --color-danger: #ff5c7c;
+  --color-accent: #2de2e6;
+  --color-accent-fg: #04121a;
+  --accent: #2de2e6;
+  --accent-fg: #04121a;
+
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-space), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "JetBrains Mono", monospace;

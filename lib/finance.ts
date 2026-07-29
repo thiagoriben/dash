@@ -1,6 +1,31 @@
-import { safeDiv } from "./utils"
+import { safeDiv, formatCurrency, formatNumber, formatPercent } from "./utils"
 
 export type SemaphoreColor = "green" | "yellow" | "red"
+
+/** ---- Formatação (aliases curtos) ---- */
+export function fmtMoney(value: number, currency = "BRL") {
+  return formatCurrency(value, currency === "USD" ? "USD" : "BRL")
+}
+export function fmtNum(value: number, digits = 0) {
+  return formatNumber(value, digits)
+}
+export function fmtPct(value: number, digits = 1) {
+  return formatPercent(value, digits)
+}
+export function fmtDate(value: string | Date | null | undefined) {
+  if (!value) return "—"
+  const d = typeof value === "string" ? new Date(value + (value.length === 10 ? "T00:00:00" : "")) : value
+  if (Number.isNaN(d.getTime())) return "—"
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
+}
+export function roas(revenue: number, spend: number) {
+  return safeDiv(revenue, spend)
+}
+export function semaphoreFromRoas(roasValue: number, min = 1, target = 2): SemaphoreColor {
+  if (roasValue >= target) return "green"
+  if (roasValue >= min) return "yellow"
+  return "red"
+}
 
 /** ---- Calculadora: Modo Real ---- */
 export type RealInputs = {

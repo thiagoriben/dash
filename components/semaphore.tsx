@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import type { SemaphoreColor } from "@/lib/finance"
+import { type SemaphoreColor, semaphoreFromRoas } from "@/lib/finance"
 import { Badge } from "./ui"
 
 const map: Record<SemaphoreColor, { tone: "positive" | "warning" | "negative"; label: string }> = {
@@ -27,4 +27,21 @@ export function SemaphoreBadge({ color, label }: { color: SemaphoreColor; label?
       {label ?? m.label}
     </Badge>
   )
+}
+
+/** Componente flexível: aceita `color` direto OU `roas` para derivar a cor. */
+export function Semaphore({
+  color,
+  roas,
+  showLabel = false,
+  label,
+}: {
+  color?: SemaphoreColor
+  roas?: number
+  showLabel?: boolean
+  label?: string
+}) {
+  const resolved: SemaphoreColor = color ?? (roas !== undefined ? semaphoreFromRoas(roas) : "yellow")
+  if (showLabel || label) return <SemaphoreBadge color={resolved} label={label} />
+  return <SemaphoreDot color={resolved} />
 }
