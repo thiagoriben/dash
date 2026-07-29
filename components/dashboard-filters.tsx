@@ -54,6 +54,18 @@ export function DashboardFilters({
         <option value="">Região</option>
         <option value="BR">BR</option>
         <option value="LATAM">LATAM</option>
+        <option value="MUNDO">MUNDO</option>
+        <option value="EUA">EUA</option>
+      </Select>
+      <Select
+        aria-label="Gastos considerados"
+        value={val("spend")}
+        onChange={(e) => update("spend", e.target.value)}
+        className="h-9 w-auto min-w-32"
+      >
+        <option value="">Todos os gastos</option>
+        <option value="ads">Somente ads</option>
+        <option value="ads,ferramentas">Ads + ferramentas</option>
       </Select>
       <Select
         aria-label="Moeda"

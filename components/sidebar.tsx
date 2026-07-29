@@ -4,11 +4,12 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import type { Profile } from "@/lib/types"
-import { LayoutDashboard, FolderKanban, Users, Zap } from "lucide-react"
+import { LayoutDashboard, FolderKanban, Users, Wallet, Settings, Zap } from "lucide-react"
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
+  { href: "/caixa", label: "Caixa", icon: Wallet },
 ]
 
 export function Sidebar({ profile }: { profile: Profile | null }) {
@@ -17,6 +18,7 @@ export function Sidebar({ profile }: { profile: Profile | null }) {
   if (profile?.role === "admin") {
     items.push({ href: "/usuarios", label: "Usuários", icon: Users })
   }
+  items.push({ href: "/config", label: "Configurações", icon: Settings })
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-[color:var(--color-border)] bg-[color:var(--color-surface)]/60 backdrop-blur-xl md:flex">

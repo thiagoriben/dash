@@ -6,6 +6,7 @@ import {
   getOwnedProjectIds,
   getExpenses,
   getDailyMetrics,
+  getSales,
   periodStartDate,
   type Period,
 } from "@/lib/data"
@@ -45,14 +46,19 @@ export default async function DashboardPage({
   if (sp.offer) projects = projects.filter((p) => p.offer_type === sp.offer)
 
   const projectIds = projects.map((p) => p.id)
-  const [expenses, metrics] = await Promise.all([
+  const [expenses, metrics, sales] = await Promise.all([
     getExpenses(projectIds, start),
     getDailyMetrics(projectIds, start),
+    getSales(projectIds, start),
   ])
 
-  const totals = aggregateTotals(metrics, expenses, projects, usdBrl)
+  // Filtro de tipos de gasto (ex.: só "ads" para ignorar ferramentas/pagamentos).
+  const spendTypes = sp.spend ? sp.spend.split(",").filter(Boolean) : undefined
+  const options = { sales, spendTypes }
+
+  const totals = aggregateTotals(metrics, expenses, projects, usdBrl, options)
   const series = timeSeries(metrics, projects, usdBrl)
-  const ranking = rankProjects(metrics, expenses, projects, usdBrl)
+  const ranking = rankProjects(metrics, expenses, projects, usdBrl, options)
   const activeCount = allProjects.filter((p) => p.status === "ativo").length
 
   const revenueTrend = series.map((s) => s.revenue)
@@ -104,7 +110,7 @@ export default async function DashboardPage({
           accent="secondary"
         />
         <KpiCard
-          label="Faturamento"
+          label="Faturamento líquido"
           value={formatCurrency(totals.revenue)}
           trend={revenueTrend}
           icon={<TrendingUp size={14} />}

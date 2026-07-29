@@ -7,5 +7,5 @@ export default async function ProjetosPage() {
   if (!profile) redirect("/login")
   const projects = await getVisibleProjects(profile)
 
-  return <ProjectsClient projects={projects} />
+  return <ProjectsClient projects={projects} prefs={profile.prefs} />
 }

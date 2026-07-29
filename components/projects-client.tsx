@@ -3,11 +3,15 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import type { Project } from "@/lib/types"
+import type { Prefs, Project } from "@/lib/types"
 import { createProject } from "@/app/actions/projects"
 import { Button, Badge, Field, Input, Select, Card } from "@/components/ui"
 import { Modal } from "@/components/modal"
+import { SelectOrOther } from "@/components/select-or-other"
 import { Plus, FolderKanban, Globe, Lock, Users, ArrowUpRight } from "lucide-react"
+
+const REGIONS = ["BR", "LATAM", "MUNDO", "EUA"]
+const OFFERS = ["X1", "Tráfego direto"]
 
 const statusTone = {
   ativo: "positive",
@@ -17,7 +21,13 @@ const statusTone = {
 
 const visIcon = { publico: Globe, privado: Lock, restrito: Users }
 
-export function ProjectsClient({ projects }: { projects: Project[] }) {
+export function ProjectsClient({
+  projects,
+  prefs,
+}: {
+  projects: Project[]
+  prefs?: Prefs | null
+}) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
   const [pending, startTransition] = useTransition()
@@ -106,19 +116,26 @@ export function ProjectsClient({ projects }: { projects: Project[] }) {
             <Input name="name" placeholder="Ex.: Oferta X — Emagrecimento" required autoFocus />
           </Field>
           <Field label="Tipo de oferta">
-            <Input name="offer_type" placeholder="x1, tráfego direto, VSL..." />
+            <SelectOrOther
+              name="offer_type"
+              options={OFFERS}
+              defaultValue={prefs?.offer_type ?? "X1"}
+              placeholder="Descreva o tipo de oferta"
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Região">
-              <Select name="region" defaultValue="BR">
-                <option value="BR">BR</option>
-                <option value="LATAM">LATAM</option>
-              </Select>
+              <SelectOrOther
+                name="region"
+                options={REGIONS}
+                defaultValue={prefs?.region ?? "BR"}
+                placeholder="Descreva a região"
+              />
             </Field>
             <Field label="Moeda">
-              <Select name="currency" defaultValue="BRL">
-                <option value="BRL">BRL</option>
-                <option value="USD">USD</option>
+              <Select name="currency" defaultValue={prefs?.currency ?? "BRL"}>
+                <option value="BRL">BRL (R$)</option>
+                <option value="USD">USD (US$)</option>
               </Select>
             </Field>
           </div>

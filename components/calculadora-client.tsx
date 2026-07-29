@@ -4,8 +4,10 @@ import { useMemo, useState } from "react"
 import { Card, Button, Input, Select } from "@/components/ui"
 import { Semaphore } from "@/components/semaphore"
 import { fmtMoney, fmtPct, computeReal, computePlan, type RealInputs, type PlanInputs } from "@/lib/finance"
-import type { Project } from "@/lib/types"
+import type { Product, Project } from "@/lib/types"
 import { Calculator, Target } from "lucide-react"
+
+type ProductOption = Product & { projectName: string }
 
 type Mode = "real" | "plan"
 
@@ -51,7 +53,13 @@ function ResultRow({ label, value, mono = true }: { label: string; value: string
   )
 }
 
-export function CalculadoraClient({ projects }: { projects: Project[] }) {
+export function CalculadoraClient({
+  projects,
+  products = [],
+}: {
+  projects: Project[]
+  products?: ProductOption[]
+}) {
   const [mode, setMode] = useState<Mode>("real")
 
   // Modo real
@@ -66,6 +74,17 @@ export function CalculadoraClient({ projects }: { projects: Project[] }) {
   })
   const realRes = useMemo(() => computeReal(real), [real])
   const setR = (k: keyof RealInputs) => (n: number) => setReal((s) => ({ ...s, [k]: n }))
+
+  // Selecionar um produto cadastrado preenche custo e ticket automaticamente.
+  function pickProduct(id: string) {
+    const p = products.find((x) => x.id === id)
+    if (!p) return
+    setReal((s) => ({
+      ...s,
+      productCost: p.product_cost,
+      revenue: p.price * (s.sales || 1),
+    }))
+  }
 
   // Modo plano
   const [plan, setPlan] = useState<PlanInputs>({
@@ -113,6 +132,19 @@ export function CalculadoraClient({ projects }: { projects: Project[] }) {
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="space-y-4 p-5">
             <h2 className="font-medium">Dados atuais</h2>
+            {products.length > 0 && (
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted">Produto cadastrado</span>
+                <Select defaultValue="" onChange={(e) => pickProduct(e.target.value)}>
+                  <option value="">Selecionar produto…</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.projectName} — {p.name} ({fmtMoney(p.price)})
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Field label="Faturamento" value={real.revenue} onChange={setR("revenue")} suffix="R$" />
               <Field label="Vendas" value={real.sales} onChange={setR("sales")} step="1" />
