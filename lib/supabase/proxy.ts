@@ -8,6 +8,8 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Preview do v0 roda em iframe cross-origin: cookie precisa de SameSite=None; Secure.
+      cookieOptions: { sameSite: "none", secure: true },
       cookies: {
         getAll() {
           return request.cookies.getAll()
@@ -16,7 +18,11 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              sameSite: "none",
+              secure: true,
+            }),
           )
         },
       },
