@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import type { Profile } from "@/lib/types"
 import { useSidebar } from "@/components/app-shell"
+import { ApprovalsButton } from "@/components/approvals-button"
 import {
   LayoutDashboard,
   FolderKanban,
@@ -30,9 +31,16 @@ const global: Item[] = [
   { href: "/recebiveis", label: "Recebíveis", icon: CalendarClock },
 ]
 
-export function Sidebar({ profile }: { profile: Profile | null }) {
+export function Sidebar({
+  profile,
+  pending = [],
+}: {
+  profile: Profile | null
+  pending?: Profile[]
+}) {
   const pathname = usePathname()
   const { collapsed, toggle } = useSidebar()
+  const isAdmin = profile?.role === "admin"
 
   const config: Item[] = [
     { href: "/config", label: "Configurações", icon: Settings, exact: true },
@@ -63,6 +71,11 @@ export function Sidebar({ profile }: { profile: Profile | null }) {
       </nav>
 
       <div className="border-t border-[color:var(--color-border)] p-3">
+        {isAdmin && (
+          <div className="mb-2">
+            <ApprovalsButton pending={pending} collapsed={collapsed} />
+          </div>
+        )}
         <button
           onClick={toggle}
           aria-label={collapsed ? "Expandir barra lateral" : "Recolher barra lateral"}

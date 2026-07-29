@@ -1,6 +1,6 @@
 "use server"
 
-import { createClient, createAdminClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 import { getCurrentProfile } from "@/lib/data"
 import { revalidatePath } from "next/cache"
 
@@ -65,8 +65,8 @@ export async function createUser(
 
 export async function updateUserRole(userId: string, role: string) {
   await requireAdmin()
-  const supabase = await createClient()
-  await supabase.from("profiles").update({ role }).eq("id", userId)
+  const admin = createAdminClient()
+  await admin.from("profiles").update({ role }).eq("id", userId)
   revalidatePath("/usuarios")
 }
 
@@ -81,8 +81,8 @@ export async function deleteUser(userId: string) {
 /* ---------- Aprovação de contas ---------- */
 export async function approveUser(userId: string) {
   await requireAdmin()
-  const supabase = await createClient()
-  await supabase.from("profiles").update({ approved: true }).eq("id", userId)
+  const admin = createAdminClient()
+  await admin.from("profiles").update({ approved: true }).eq("id", userId)
   revalidatePath("/usuarios")
   revalidatePath("/", "layout")
   return { ok: true }
