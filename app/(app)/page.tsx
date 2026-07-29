@@ -9,7 +9,7 @@ import {
   periodStartDate,
   type Period,
 } from "@/lib/data"
-import { getUsdBrlRate } from "@/lib/currency"
+import { getUsdBrlRate } from "@/lib/currency-server"
 import { aggregateTotals, timeSeries, rankProjects } from "@/lib/aggregate"
 import { formatCurrency, formatNumber } from "@/lib/utils"
 import { KpiCard } from "@/components/kpi-card"

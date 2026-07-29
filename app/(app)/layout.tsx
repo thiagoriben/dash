@@ -3,7 +3,7 @@ import { Sidebar } from "@/components/sidebar"
 import { Topbar } from "@/components/topbar"
 import { MobileNav } from "@/components/mobile-nav"
 import { getCurrentProfile } from "@/lib/data"
-import { getUsdBrlRate } from "@/lib/currency"
+import { getUsdBrlRate } from "@/lib/currency-server"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [profile, usdBrl] = await Promise.all([getCurrentProfile(), getUsdBrlRate()])

@@ -11,7 +11,7 @@ import {
   periodStartDate,
   type Period,
 } from "@/lib/data"
-import { getUsdBrlRate } from "@/lib/currency"
+import { getUsdBrlRate } from "@/lib/currency-server"
 import { ProjectDetail } from "@/components/project/project-detail"
 
 export default async function ProjectPage({
