@@ -6,6 +6,7 @@ import type {
   ActivityLog,
   AdAccount,
   CardCharge,
+  CashEntry,
   Creative,
   DailyMetric,
   Expense,
@@ -67,6 +68,7 @@ export function ProjectDetail(props: {
   members: ProjectMemberWithProfile[]
   adAccounts: AdAccount[]
   cardCharges: CardCharge[]
+  cashEntries: CashEntry[]
   activity: ActivityLog[]
   owner: Profile | null
   isOwner: boolean
@@ -133,7 +135,12 @@ export function ProjectDetail(props: {
             expenses={props.expenses}
             sales={props.sales}
             cardCharges={props.cardCharges}
+            cashEntries={props.cashEntries}
             usdBrl={props.usdBrl}
+            spendView={props.prefs?.spend_view ?? "ads"}
+            profitBase={props.prefs?.profit_base ?? "ads"}
+            metaTaxPct={props.prefs?.meta_tax_pct ?? 0}
+            widgets={props.prefs?.project_widgets}
           />
         )}
         {tab === "Vendas" && (

@@ -291,6 +291,28 @@ export async function getCashEntries(profile: Profile | null): Promise<CashEntry
   return (data ?? []) as CashEntry[]
 }
 
+/**
+ * Lançamentos de caixa de projetos que devem refletir na dashboard.
+ * Apenas entradas/saídas marcadas com `to_dashboard` entram (opt-in do usuário).
+ */
+export async function getCashEntriesForProjects(
+  projectIds: string[],
+  from: string | null,
+  to: string | null,
+): Promise<CashEntry[]> {
+  if (projectIds.length === 0) return []
+  const supabase = await createClient()
+  let q = supabase
+    .from("cash_entries")
+    .select("*")
+    .in("project_id", projectIds)
+    .eq("to_dashboard", true)
+  if (from) q = q.gte("occurred_at", from)
+  if (to) q = q.lte("occurred_at", to)
+  const { data } = await q.order("occurred_at", { ascending: false })
+  return (data ?? []) as CashEntry[]
+}
+
 /** Contas bancárias/carteiras do usuário (gestor financeiro pessoal). */
 export async function getBankAccounts(profile: Profile | null): Promise<BankAccount[]> {
   if (!profile) return []

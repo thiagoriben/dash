@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown } from "lucide-react"
 export function KpiCard({
   label,
   value,
+  hint,
   delta,
   trend,
   icon,
@@ -12,6 +13,7 @@ export function KpiCard({
 }: {
   label: string
   value: string
+  hint?: string
   delta?: number
   trend?: number[]
   icon?: React.ReactNode
@@ -46,7 +48,10 @@ export function KpiCard({
         ) : null}
       </div>
       <div className="mt-3 flex items-end justify-between gap-2">
-        <div className="font-mono text-2xl font-semibold tracking-tight text-foreground">{value}</div>
+        <div>
+          <div className="font-mono text-2xl font-semibold tracking-tight text-foreground">{value}</div>
+          {hint ? <div className="mt-1 font-mono text-[11px] text-muted">{hint}</div> : null}
+        </div>
         {trend && trend.length > 1 ? <Sparkline data={trend} /> : null}
       </div>
     </div>

@@ -162,8 +162,9 @@ export default async function DashboardPage({
               return (
                 <KpiCard
                   key={k}
-                  label={w.hint ? `${w.label} · ${w.hint}` : w.label}
+                  label={w.label}
                   value={w.value}
+                  hint={w.hint ?? undefined}
                   trend={trendFor(k)}
                   accent={w.accent}
                 />

@@ -93,24 +93,49 @@ export function TabOverview({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-semibold">Desempenho</h2>
           <p className="text-sm text-muted">
             Atualiza sozinho com vendas e gastos. Lançar métricas do dia é opcional.
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-          <Plus size={16} />
-          Atualizar métricas
-        </Button>
+        <div className="flex items-center gap-2">
+          <HistoryPopover points={historyPoints} />
+          <Select
+            aria-label="Como exibir o gasto"
+            value={view}
+            onChange={(e) => setView(e.target.value as SpendView)}
+            className="h-9 w-auto text-sm"
+          >
+            {SPEND_VIEWS.map((v) => (
+              <option key={v.value} value={v.value}>
+                {v.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            aria-label="Base do lucro"
+            value={base}
+            onChange={(e) => setBase(e.target.value as ProfitBase)}
+            className="h-9 w-auto text-sm"
+          >
+            <option value="ads">Lucro s/ anúncios</option>
+            <option value="card">Lucro c/ imposto</option>
+          </Select>
+          <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+            <Plus size={16} />
+            Métricas
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <KpiCard label="Gasto" value={formatCurrency(totals.totalSpend)} icon={<Wallet size={14} />} accent="secondary" />
-        <KpiCard label="Faturamento líquido" value={formatCurrency(netSales || totals.revenue)} icon={<TrendingUp size={14} />} accent="primary" />
-        <KpiCard label="Lucro" value={formatCurrency(totals.profit)} icon={<PiggyBank size={14} />} accent={totals.profit >= 0 ? "positive" : "negative"} />
-        <KpiCard label="ROAS" value={`${formatNumber(totals.roas, 2)}x`} icon={<Target size={14} />} accent="warning" />
+        {widgetKeys.map((k) => {
+          const w = buildWidget(k, breakdown, view, base)
+          if (!w) return null
+          return <KpiCard key={k} label={w.label} value={w.value} hint={w.hint ?? undefined} accent={w.accent} />
+        })}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

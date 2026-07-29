@@ -24,8 +24,10 @@ import {
   deleteAdAccount,
   createCardCharge,
   deleteCardCharge,
+  createExpense,
 } from "@/app/actions/projects"
-import { Plus, Wallet, CreditCard, Receipt } from "lucide-react"
+import { CURRENCIES } from "@/lib/currency"
+import { Plus, Wallet, CreditCard, Receipt, TrendingDown } from "lucide-react"
 
 export function TabAdAccounts({
   project,
