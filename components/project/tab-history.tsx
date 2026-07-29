@@ -1,7 +1,7 @@
 "use client"
 
 import type { ActivityLog } from "@/lib/types"
-import { timeAgo, actionLabel } from "@/lib/activity"
+import { timeAgo, actionLabel } from "@/lib/activity-format"
 import { Card, CardContent, Badge } from "@/components/ui"
 import { History } from "lucide-react"
 

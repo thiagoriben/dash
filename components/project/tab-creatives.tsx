@@ -18,6 +18,10 @@ import {
 } from "@/app/actions/projects"
 import { Plus } from "lucide-react"
 
+const today = () => new Date().toISOString().slice(0, 10)
+const fmtDate = (v: string | null) =>
+  v ? new Date(v).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—"
+
 const STATUS: { value: Creative["status"]; label: string }[] = [
   { value: "testando", label: "Testando" },
   { value: "escalando", label: "Escalando" },
@@ -102,6 +106,10 @@ export function TabCreatives({
                     <div className="min-w-0">
                       <p className="truncate font-medium">{c.name}</p>
                       <SemaphoreBadge color={light} />
+                      <p className="mt-1 text-[11px] text-muted">
+                        Criado em {fmtDate(c.created_at)}
+                        {c.activated_at ? ` · ativo desde ${fmtDate(c.activated_at)}` : ""}
+                      </p>
                     </div>
                     <RowActions
                       onEdit={() => openEdit(c)}
@@ -156,7 +164,11 @@ export function TabCreatives({
               </Select>
             </Field>
             <Field label="Ativado em">
-              <Input name="activated_at" type="date" defaultValue={editing?.activated_at ?? ""} />
+              <Input
+                name="activated_at"
+                type="date"
+                defaultValue={editing?.activated_at ?? today()}
+              />
             </Field>
             <Field label="Gasto">
               <Input name="spend" inputMode="decimal" placeholder="0,00" defaultValue={editing?.spend} />
