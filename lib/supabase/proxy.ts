@@ -30,17 +30,18 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname
   const isAuthRoute = path.startsWith("/login") || path.startsWith("/auth")
 
-  if (!user && !isAuthRoute) {
+  // Preserva os cookies de sessão (possivelmente atualizados por getUser) também nos redirects.
+  const redirectTo = (pathname: string) => {
     const url = request.nextUrl.clone()
-    url.pathname = "/login"
-    return NextResponse.redirect(url)
+    url.pathname = pathname
+    url.search = ""
+    const res = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach((c) => res.cookies.set(c))
+    return res
   }
 
-  if (user && path === "/login") {
-    const url = request.nextUrl.clone()
-    url.pathname = "/"
-    return NextResponse.redirect(url)
-  }
+  if (!user && !isAuthRoute) return redirectTo("/login")
+  if (user && path === "/login") return redirectTo("/")
 
   return supabaseResponse
 }

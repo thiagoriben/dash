@@ -21,6 +21,8 @@ import { TabCalculator } from "./tab-calculator"
 import { TabFunnel } from "./tab-funnel"
 import { TabDre } from "./tab-dre"
 import { TabSplits } from "./tab-splits"
+import { TabMembers } from "./tab-members"
+import type { ProjectMemberWithProfile } from "@/lib/data"
 
 const TABS = [
   "Visão geral",
@@ -30,6 +32,7 @@ const TABS = [
   "Funil",
   "DRE",
   "Repartição",
+  "Colaboradores",
 ] as const
 type Tab = (typeof TABS)[number]
 
@@ -41,6 +44,9 @@ export function ProjectDetail(props: {
   funnel: FunnelProduct[]
   splits: ProfitSplit[]
   profiles: Profile[]
+  members: ProjectMemberWithProfile[]
+  owner: Profile | null
+  isOwner: boolean
   usdBrl: number
 }) {
   const { project } = props
@@ -133,6 +139,14 @@ export function ProjectDetail(props: {
             expenses={props.expenses}
             funnel={props.funnel}
             usdBrl={props.usdBrl}
+          />
+        )}
+        {tab === "Colaboradores" && (
+          <TabMembers
+            project={project}
+            members={props.members}
+            owner={props.owner}
+            isOwner={props.isOwner}
           />
         )}
       </div>

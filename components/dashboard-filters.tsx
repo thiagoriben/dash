@@ -3,16 +3,14 @@
 import { useRouter, useSearchParams } from "next/navigation"
 import { useTransition } from "react"
 import { Select } from "@/components/ui"
-import type { Profile, Project } from "@/lib/types"
+import type { Project } from "@/lib/types"
 import { Filter } from "lucide-react"
 
 export function DashboardFilters({
   projects,
-  profiles,
   offerTypes,
 }: {
   projects: Project[]
-  profiles: Profile[]
   offerTypes: string[]
 }) {
   const router = useRouter()
@@ -66,19 +64,6 @@ export function DashboardFilters({
         <option value="">Moeda</option>
         <option value="BRL">BRL</option>
         <option value="USD">USD</option>
-      </Select>
-      <Select
-        aria-label="Sócio"
-        value={val("owner")}
-        onChange={(e) => update("owner", e.target.value)}
-        className="h-9 w-auto min-w-32"
-      >
-        <option value="">Sócio</option>
-        {profiles.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.full_name ?? p.username}
-          </option>
-        ))}
       </Select>
       {offerTypes.length > 0 ? (
         <Select

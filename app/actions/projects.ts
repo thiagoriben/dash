@@ -55,6 +55,41 @@ export async function deleteProject(id: string) {
   return { ok: true }
 }
 
+/* ---------- Colaboradores ---------- */
+export async function addProjectMember(projectId: string, formData: FormData) {
+  const supabase = await createClient()
+  const username = String(formData.get("username") ?? "")
+    .trim()
+    .toLowerCase()
+  if (!username) return { error: "Informe o usuário." }
+
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("username", username)
+    .maybeSingle()
+  if (!prof) return { error: "Usuário não encontrado." }
+
+  const { error } = await supabase.from("project_members").insert({
+    project_id: projectId,
+    user_id: prof.id,
+    role: String(formData.get("role") ?? "editor"),
+  })
+  if (error) {
+    return { error: error.code === "23505" ? "Este usuário já é colaborador." : error.message }
+  }
+  revalidatePath(`/projetos/${projectId}`)
+  return { ok: true }
+}
+
+export async function removeProjectMember(projectId: string, id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from("project_members").delete().eq("id", id)
+  if (error) return { error: error.message }
+  revalidatePath(`/projetos/${projectId}`)
+  return { ok: true }
+}
+
 /* ---------- Gastos ---------- */
 export async function createExpense(projectId: string, formData: FormData) {
   const supabase = await createClient()

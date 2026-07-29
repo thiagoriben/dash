@@ -3,9 +3,9 @@ import Link from "next/link"
 import {
   getCurrentProfile,
   getVisibleProjects,
+  getOwnedProjectIds,
   getExpenses,
   getDailyMetrics,
-  getProfiles,
   periodStartDate,
   type Period,
 } from "@/lib/data"
@@ -32,14 +32,16 @@ export default async function DashboardPage({
   const start = periodStartDate(period)
   const usdBrl = await getUsdBrlRate()
 
-  const [allProjects, profiles] = await Promise.all([getVisibleProjects(profile), getProfiles()])
+  const [allProjects, ownedIds] = await Promise.all([
+    getVisibleProjects(profile),
+    getOwnedProjectIds(profile),
+  ])
 
   // aplica filtros
   let projects = allProjects
   if (sp.project) projects = projects.filter((p) => p.id === sp.project)
   if (sp.region) projects = projects.filter((p) => p.region === sp.region)
   if (sp.currency) projects = projects.filter((p) => p.currency === sp.currency)
-  if (sp.owner) projects = projects.filter((p) => p.owner_id === sp.owner)
   if (sp.offer) projects = projects.filter((p) => p.offer_type === sp.offer)
 
   const projectIds = projects.map((p) => p.id)
@@ -63,14 +65,35 @@ export default async function DashboardPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-display text-2xl font-semibold tracking-tight text-balance">
-          Visão geral
+          Meu painel
         </h1>
         <p className="text-sm text-muted">
-          Olá, {profile.full_name ?? profile.username}. Aqui está o panorama das suas operações.
+          Olá, {profile.full_name ?? profile.username}. Resultados dos seus projetos
+          {ownedIds.size < allProjects.length ? " e colaborações" : ""}.
         </p>
       </div>
 
-      <DashboardFilters projects={allProjects} profiles={profiles} offerTypes={offerTypes} />
+      {allProjects.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <Rocket size={28} className="text-primary" />
+            <div className="flex flex-col gap-1">
+              <p className="font-medium text-foreground">Você ainda não tem projetos</p>
+              <p className="text-sm text-muted">
+                Crie seu primeiro projeto para acompanhar gastos, criativos e lucro.
+              </p>
+            </div>
+            <Link
+              href="/projetos"
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-[var(--accent-fg)] hover:opacity-90"
+            >
+              Criar projeto
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <DashboardFilters projects={allProjects} offerTypes={offerTypes} />
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard
@@ -161,8 +184,13 @@ export default async function DashboardPage({
                     <span className="w-5 text-center font-mono text-sm text-muted">{i + 1}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium text-foreground group-hover:text-primary">
-                          {r.project.name}
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+                            {r.project.name}
+                          </span>
+                          {!ownedIds.has(r.project.id) ? (
+                            <Badge tone="secondary">Colaboração</Badge>
+                          ) : null}
                         </span>
                         <span
                           className={`font-mono text-sm font-semibold ${positive ? "text-positive" : "text-negative"}`}

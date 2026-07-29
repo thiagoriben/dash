@@ -25,8 +25,24 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return null
-  const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single()
-  return data as Profile | null
+
+  const { data } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
+  if (data) return data as Profile
+
+  // Sessão válida mas sem perfil: cria um a partir dos metadados (não desloga o usuário).
+  const username =
+    (user.user_metadata?.username as string) ?? user.email?.split("@")[0] ?? "usuario"
+  const { data: created } = await supabase
+    .from("profiles")
+    .insert({
+      id: user.id,
+      username,
+      full_name: (user.user_metadata?.full_name as string) ?? null,
+      role: (user.user_metadata?.role as string) ?? "member",
+    })
+    .select("*")
+    .maybeSingle()
+  return (created as Profile) ?? null
 }
 
 export async function getProfiles(): Promise<Profile[]> {
@@ -35,27 +51,27 @@ export async function getProfiles(): Promise<Profile[]> {
   return (data ?? []) as Profile[]
 }
 
-/** Projetos visíveis para o usuário (organização visual). */
+/**
+ * Projetos visíveis para o usuário. O RLS já restringe as linhas retornadas
+ * aos projetos que o usuário criou OU nos quais é colaborador (project_members),
+ * então basta retornar o que vier — sem filtro extra de visibilidade.
+ */
 export async function getVisibleProjects(profile: Profile | null): Promise<Project[]> {
-  const supabase = await createClient()
-  const { data: projects } = await supabase.from("projects").select("*").order("created_at", {
-    ascending: false,
-  })
-  const all = (projects ?? []) as Project[]
   if (!profile) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("projects")
+    .select("*")
+    .order("created_at", { ascending: false })
+  return (data ?? []) as Project[]
+}
 
-  const { data: memberships } = await supabase
-    .from("project_members")
-    .select("project_id")
-    .eq("user_id", profile.id)
-  const memberIds = new Set((memberships ?? []).map((m) => m.project_id))
-
-  return all.filter((p) => {
-    if (p.visibility === "publico") return true
-    if (p.visibility === "privado") return p.owner_id === profile.id
-    if (p.visibility === "restrito") return p.owner_id === profile.id || memberIds.has(p.id)
-    return true
-  })
+/** Retorna quais projetos (dentre os visíveis) o usuário é dono. */
+export async function getOwnedProjectIds(profile: Profile | null): Promise<Set<string>> {
+  if (!profile) return new Set()
+  const supabase = await createClient()
+  const { data } = await supabase.from("projects").select("id").eq("owner_id", profile.id)
+  return new Set((data ?? []).map((p) => p.id))
 }
 
 export async function getProject(id: string): Promise<Project | null> {
@@ -109,4 +125,25 @@ export async function getProfitSplits(projectId: string): Promise<ProfitSplit[]>
   const supabase = await createClient()
   const { data } = await supabase.from("profit_splits").select("*").eq("project_id", projectId)
   return (data ?? []) as ProfitSplit[]
+}
+
+export type ProjectMemberWithProfile = {
+  id: string
+  user_id: string
+  role: string
+  profile: Profile | null
+}
+
+export async function getProjectMembers(projectId: string): Promise<ProjectMemberWithProfile[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("project_members")
+    .select("id, user_id, role, profile:profiles(*)")
+    .eq("project_id", projectId)
+  return (data ?? []).map((m: any) => ({
+    id: m.id,
+    user_id: m.user_id,
+    role: m.role,
+    profile: (m.profile ?? null) as Profile | null,
+  }))
 }

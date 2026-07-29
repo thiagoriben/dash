@@ -8,6 +8,7 @@ import {
   getFunnelProducts,
   getProfitSplits,
   getProfiles,
+  getProjectMembers,
   periodStartDate,
   type Period,
 } from "@/lib/data"
@@ -33,14 +34,18 @@ export default async function ProjectPage({
   const start = periodStartDate(period)
   const usdBrl = await getUsdBrlRate()
 
-  const [expenses, metrics, creatives, funnel, splits, profiles] = await Promise.all([
+  const [expenses, metrics, creatives, funnel, splits, profiles, members] = await Promise.all([
     getExpenses([id], start),
     getDailyMetrics([id], start),
     getCreatives(id),
     getFunnelProducts(id),
     getProfitSplits(id),
     getProfiles(),
+    getProjectMembers(id),
   ])
+
+  const owner = profiles.find((p) => p.id === project.owner_id) ?? null
+  const isOwner = project.owner_id === profile.id
 
   return (
     <ProjectDetail
@@ -51,6 +56,9 @@ export default async function ProjectPage({
       funnel={funnel}
       splits={splits}
       profiles={profiles}
+      members={members}
+      owner={owner}
+      isOwner={isOwner}
       usdBrl={usdBrl}
     />
   )
