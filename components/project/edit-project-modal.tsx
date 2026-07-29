@@ -8,13 +8,25 @@ import { Button, Field, Input, Select } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { SelectOrOther } from "@/components/select-or-other"
 import { DEFAULT_CURRENCIES, DEFAULT_OFFER_TYPES, DEFAULT_REGIONS } from "@/lib/currency"
-import { Pencil } from "lucide-react"
 
-export function EditProjectModal({ project, prefs }: { project: Project; prefs: Prefs | null }) {
-  const [open, setOpen] = useState(false)
+export function EditProjectModal({
+  project,
+  prefs,
+  onClose,
+}: {
+  project: Project
+  prefs: Prefs | null
+  onClose: () => void
+}) {
+  const [open, setOpen] = useState(true)
   const [error, setError] = useState<string>()
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+
+  function close() {
+    setOpen(false)
+    onClose()
+  }
 
   const regions = prefs?.regions?.length ? prefs.regions : DEFAULT_REGIONS
   const offers = prefs?.offer_types?.length ? prefs.offer_types : DEFAULT_OFFER_TYPES
@@ -26,18 +38,15 @@ export function EditProjectModal({ project, prefs }: { project: Project; prefs: 
       const res = await updateProject(project.id, formData)
       if (res?.error) setError(res.error)
       else {
-        setOpen(false)
         router.refresh()
+        close()
       }
     })
   }
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Pencil size={14} /> Editar
-      </Button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Editar projeto">
+      <Modal open={open} onClose={close} title="Editar projeto">
         <form action={onSubmit} className="flex flex-col gap-4">
           <Field label="Nome">
             <Input name="name" defaultValue={project.name} required autoFocus />

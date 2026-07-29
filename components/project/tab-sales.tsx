@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { PaymentGateway, Prefs, Product, Project, Sale } from "@/lib/types"
+import type { Creative, PaymentGateway, Prefs, Product, Project, Sale } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
 import { computeSaleNet, fmtDate } from "@/lib/finance"
 import {
@@ -30,12 +30,14 @@ export function TabSales({
   project,
   sales,
   products,
+  creatives,
   gateways,
   prefs,
 }: {
   project: Project
   sales: Sale[]
   products: Product[]
+  creatives: Creative[]
   gateways: PaymentGateway[]
   prefs: Prefs | null
 }) {
@@ -107,6 +109,7 @@ export function TabSales({
               <tr>
                 <Th>Data</Th>
                 <Th>Produto</Th>
+                <Th>Criativo</Th>
                 <Th>Origem</Th>
                 <Th>Pagamento</Th>
                 <Th className="text-right">Bruto</Th>
@@ -119,17 +122,19 @@ export function TabSales({
             <tbody>
               {sales.length === 0 ? (
                 <tr>
-                  <Td colSpan={9} className="py-10 text-center text-muted">
+                  <Td colSpan={10} className="py-10 text-center text-muted">
                     Nenhuma venda registrada.
                   </Td>
                 </tr>
               ) : (
                 sales.map((s) => {
                   const prod = products.find((p) => p.id === s.product_id)
+                  const creative = creatives.find((c) => c.id === s.creative_id)
                   return (
                     <tr key={s.id}>
                       <Td className="whitespace-nowrap text-muted">{fmtDate(s.sold_at)}</Td>
                       <Td>{prod?.name ?? "—"}</Td>
+                      <Td className="text-muted">{creative?.name ?? "—"}</Td>
                       <Td>{s.source ? <Badge>{s.source}</Badge> : <span className="text-muted">—</span>}</Td>
                       <Td className="capitalize">{s.payment_method}</Td>
                       <Td className="text-right font-mono">
@@ -173,6 +178,17 @@ export function TabSales({
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} — {formatCurrency(p.price, project.currency)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Criativo que vendeu (opcional)">
+            <Select name="creative_id" defaultValue="">
+              <option value="">Sem criativo</option>
+              {creatives.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </Select>

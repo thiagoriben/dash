@@ -3,6 +3,9 @@
 import { useState } from "react"
 import Link from "next/link"
 import type {
+  ActivityLog,
+  AdAccount,
+  CardCharge,
   Creative,
   DailyMetric,
   Expense,
@@ -14,8 +17,8 @@ import type {
   ProfitSplit,
   Sale,
 } from "@/lib/types"
-import { Badge } from "@/components/ui"
-import { ChevronLeft } from "lucide-react"
+import { Badge, Button } from "@/components/ui"
+import { ChevronLeft, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TabOverview } from "./tab-overview"
 import { TabExpenses } from "./tab-expenses"
@@ -27,19 +30,26 @@ import { TabSplits } from "./tab-splits"
 import { TabMembers } from "./tab-members"
 import { TabProducts } from "./tab-products"
 import { TabSales } from "./tab-sales"
+import { TabReceivables } from "./tab-receivables"
+import { TabAdAccounts } from "./tab-ad-accounts"
+import { TabHistory } from "./tab-history"
+import { EditProjectModal } from "./edit-project-modal"
 import type { ProjectMemberWithProfile } from "@/lib/data"
 
 const TABS = [
   "Visão geral",
   "Vendas",
+  "Recebíveis",
   "Produtos",
   "Gastos",
   "Criativos",
+  "Contas de anúncio",
   "Calculadora",
   "Funil",
   "DRE",
   "Repartição",
   "Colaboradores",
+  "Histórico",
 ] as const
 type Tab = (typeof TABS)[number]
 
@@ -50,10 +60,14 @@ export function ProjectDetail(props: {
   creatives: Creative[]
   products: Product[]
   sales: Sale[]
+  receivables: Sale[]
   gateways: PaymentGateway[]
   splits: ProfitSplit[]
   profiles: Profile[]
   members: ProjectMemberWithProfile[]
+  adAccounts: AdAccount[]
+  cardCharges: CardCharge[]
+  activity: ActivityLog[]
   owner: Profile | null
   isOwner: boolean
   prefs: Prefs | null
@@ -61,6 +75,7 @@ export function ProjectDetail(props: {
 }) {
   const { project } = props
   const [tab, setTab] = useState<Tab>("Visão geral")
+  const [editing, setEditing] = useState(false)
 
   return (
     <div className="flex flex-col gap-6">
@@ -83,6 +98,11 @@ export function ProjectDetail(props: {
             <Badge tone="primary">{project.region}</Badge>
             <Badge tone="secondary">{project.currency}</Badge>
             {project.offer_type ? <Badge tone="default">{project.offer_type}</Badge> : null}
+            {props.isOwner && (
+              <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+                <Pencil size={14} /> Editar
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -112,6 +132,7 @@ export function ProjectDetail(props: {
             metrics={props.metrics}
             expenses={props.expenses}
             sales={props.sales}
+            cardCharges={props.cardCharges}
             usdBrl={props.usdBrl}
           />
         )}
@@ -120,9 +141,13 @@ export function ProjectDetail(props: {
             project={project}
             sales={props.sales}
             products={props.products}
+            creatives={props.creatives}
             gateways={props.gateways}
             prefs={props.prefs}
           />
+        )}
+        {tab === "Recebíveis" && (
+          <TabReceivables project={project} receivables={props.receivables} usdBrl={props.usdBrl} />
         )}
         {tab === "Produtos" && (
           <TabProducts project={project} products={props.products} gateways={props.gateways} />
@@ -132,6 +157,15 @@ export function ProjectDetail(props: {
         )}
         {tab === "Criativos" && (
           <TabCreatives project={project} creatives={props.creatives} products={props.products} />
+        )}
+        {tab === "Contas de anúncio" && (
+          <TabAdAccounts
+            project={project}
+            adAccounts={props.adAccounts}
+            cardCharges={props.cardCharges}
+            metrics={props.metrics}
+            usdBrl={props.usdBrl}
+          />
         )}
         {tab === "Calculadora" && (
           <TabCalculator
@@ -174,7 +208,16 @@ export function ProjectDetail(props: {
             isOwner={props.isOwner}
           />
         )}
+        {tab === "Histórico" && <TabHistory activity={props.activity} />}
       </div>
+
+      {editing && (
+        <EditProjectModal
+          project={project}
+          prefs={props.prefs}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </div>
   )
 }

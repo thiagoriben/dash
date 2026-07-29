@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { DailyMetric, Expense, Project, Sale } from "@/lib/types"
+import type { CardCharge, DailyMetric, Expense, Project, Sale } from "@/lib/types"
 import { aggregateTotals, timeSeries } from "@/lib/aggregate"
-import { diagnoseFunnel } from "@/lib/finance"
+import { diagnoseFunnel, computeTrafficTax } from "@/lib/finance"
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils"
 import { KpiCard } from "@/components/kpi-card"
 import { SpendRevenueChart } from "@/components/spend-revenue-chart"
@@ -19,21 +19,26 @@ export function TabOverview({
   metrics,
   expenses,
   sales,
+  cardCharges = [],
   usdBrl,
 }: {
   project: Project
   metrics: DailyMetric[]
   expenses: Expense[]
   sales: Sale[]
+  cardCharges?: CardCharge[]
   usdBrl: number
 }) {
   const netSales = sales.reduce((s, v) => s + v.net_amount, 0)
+  const adSpend = metrics.reduce((s, m) => s + m.spend, 0)
+  const cardCharged = cardCharges.reduce((s, c) => s + c.amount, 0)
+  const trafficTax = computeTrafficTax(adSpend, cardCharged)
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string>()
   const router = useRouter()
 
-  const totals = aggregateTotals(metrics, expenses, [project], usdBrl)
+  const totals = aggregateTotals(metrics, expenses, [project], usdBrl, { sales })
   const series = timeSeries(metrics, [project], usdBrl)
 
   const funnelTot = metrics.reduce(
@@ -61,11 +66,16 @@ export function TabOverview({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold">Desempenho</h2>
-        <Button size="sm" onClick={() => setOpen(true)}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold">Desempenho</h2>
+          <p className="text-sm text-muted">
+            Atualiza sozinho com vendas e gastos. Lançar métricas do dia é opcional.
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
           <Plus size={16} />
-          Lançar métrica do dia
+          Atualizar métricas
         </Button>
       </div>
 
@@ -116,7 +126,7 @@ export function TabOverview({
         </Card>
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Lançar métrica diária" description="Um registro por dia. Reenviar a mesma data atualiza os valores.">
+      <Modal open={open} onClose={() => setOpen(false)} title="Atualizar métricas do dia" description="Opcional. Preencha só o que quiser — um registro por data, reenviar atualiza os valores.">
         <form action={onSubmit} className="flex flex-col gap-4">
           <Field label="Data">
             <Input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
@@ -134,7 +144,10 @@ export function TabOverview({
             <Field label="Cliques">
               <Input name="clicks" inputMode="numeric" placeholder="0" />
             </Field>
-            <Field label="Checkouts iniciados">
+            <Field label="Visualizações de página">
+              <Input name="page_views" inputMode="numeric" placeholder="0" />
+            </Field>
+            <Field label="Checkouts iniciados (IC)">
               <Input name="checkouts_initiated" inputMode="numeric" placeholder="0" />
             </Field>
             <Field label="Vendas">

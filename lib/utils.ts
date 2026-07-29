@@ -5,8 +5,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(value: number, currency: "BRL" | "USD" = "BRL") {
-  const symbol = currency === "USD" ? "US$" : "R$"
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  BRL: "R$",
+  USD: "US$",
+  EUR: "€",
+  GBP: "£",
+}
+
+export function formatCurrency(value: number, currency: string = "BRL") {
+  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `
   const n = Number.isFinite(value) ? value : 0
   return `${symbol} ${n.toLocaleString("pt-BR", {
     minimumFractionDigits: 2,

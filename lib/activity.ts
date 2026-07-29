@@ -61,3 +61,17 @@ export function timeAgo(iso: string, now = Date.now()): string {
   const year = Math.floor(month / 12)
   return `há ${year} ${year === 1 ? "ano" : "anos"}`
 }
+
+/** Rótulo curto em português para a ação registrada. */
+export function actionLabel(action: string): string {
+  switch (action) {
+    case "create":
+      return "criou"
+    case "update":
+      return "editou"
+    case "delete":
+      return "excluiu"
+    default:
+      return action
+  }
+}

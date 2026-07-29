@@ -26,15 +26,16 @@ export function TabFunnel({
     (a, m) => ({
       impressions: a.impressions + m.impressions,
       clicks: a.clicks + m.clicks,
+      pageViews: a.pageViews + m.page_views,
       checkouts: a.checkouts + m.checkouts_initiated,
       sales: a.sales + m.sales,
     }),
-    { impressions: 0, clicks: 0, checkouts: 0, sales: 0 },
+    { impressions: 0, clicks: 0, pageViews: 0, checkouts: 0, sales: 0 },
   )
   const steps = [
-    { label: "Impressões", value: totals.impressions },
     { label: "Cliques", value: totals.clicks },
-    { label: "Checkouts", value: totals.checkouts },
+    { label: "Visualizações de página", value: totals.pageViews },
+    { label: "Checkouts (IC)", value: totals.checkouts },
     { label: "Vendas", value: totals.sales },
   ]
   const top = steps[0].value || 1
