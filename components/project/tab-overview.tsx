@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { DailyMetric, Expense, Project } from "@/lib/types"
+import type { DailyMetric, Expense, Project, Sale } from "@/lib/types"
 import { aggregateTotals, timeSeries } from "@/lib/aggregate"
 import { diagnoseFunnel } from "@/lib/finance"
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils"
@@ -18,13 +18,16 @@ export function TabOverview({
   project,
   metrics,
   expenses,
+  sales,
   usdBrl,
 }: {
   project: Project
   metrics: DailyMetric[]
   expenses: Expense[]
+  sales: Sale[]
   usdBrl: number
 }) {
+  const netSales = sales.reduce((s, v) => s + v.net_amount, 0)
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string>()
@@ -68,7 +71,7 @@ export function TabOverview({
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <KpiCard label="Gasto" value={formatCurrency(totals.totalSpend)} icon={<Wallet size={14} />} accent="secondary" />
-        <KpiCard label="Faturamento" value={formatCurrency(totals.revenue)} icon={<TrendingUp size={14} />} accent="primary" />
+        <KpiCard label="Faturamento líquido" value={formatCurrency(netSales || totals.revenue)} icon={<TrendingUp size={14} />} accent="primary" />
         <KpiCard label="Lucro" value={formatCurrency(totals.profit)} icon={<PiggyBank size={14} />} accent={totals.profit >= 0 ? "positive" : "negative"} />
         <KpiCard label="ROAS" value={`${formatNumber(totals.roas, 2)}x`} icon={<Target size={14} />} accent="warning" />
       </div>

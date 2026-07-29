@@ -2,9 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { DailyMetric, Expense, FunnelProduct, Profile, Project, ProfitSplit } from "@/lib/types"
+import type { DailyMetric, Expense, Profile, Project, ProfitSplit, Sale } from "@/lib/types"
 import { toBRL } from "@/lib/currency"
-import { computeDre } from "@/lib/finance"
+import { computeDreFromSales } from "@/lib/finance"
 import { formatCurrency, formatPercent } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle, Button, Field, Input, Select, Table, Th, Td, Badge } from "@/components/ui"
 import { Modal } from "@/components/modal"
@@ -17,7 +17,7 @@ export function TabSplits({
   profiles,
   metrics,
   expenses,
-  funnel,
+  sales,
   usdBrl,
 }: {
   project: Project
@@ -25,7 +25,7 @@ export function TabSplits({
   profiles: Profile[]
   metrics: DailyMetric[]
   expenses: Expense[]
-  funnel: FunnelProduct[]
+  sales: Sale[]
   usdBrl: number
 }) {
   const [open, setOpen] = useState(false)
@@ -35,12 +35,6 @@ export function TabSplits({
 
   const netProfit = useMemo(() => {
     const cur = project.currency
-    const revenue = metrics.reduce((s, m) => s + toBRL(m.revenue, cur, usdBrl), 0)
-    const sales = metrics.reduce((s, m) => s + m.sales, 0)
-    const frontCost = funnel.find((f) => f.kind === "front")?.product_cost ?? 0
-    const productCost = frontCost * sales
-    const gatewayFees = revenue * 0.05
-    const taxes = revenue * 0.06
     const metricAdSpend = metrics.reduce((s, m) => s + toBRL(m.spend, cur, usdBrl), 0)
     const expenseAdSpend = expenses
       .filter((e) => e.type === "ads")
@@ -49,8 +43,8 @@ export function TabSplits({
     const toolSpend = expenses
       .filter((e) => e.type !== "ads")
       .reduce((s, e) => s + toBRL(e.amount, e.currency, usdBrl), 0)
-    return computeDre({ revenue, productCost, gatewayFees, taxes, adSpend, toolSpend }).lucroLiquido
-  }, [metrics, expenses, funnel, project.currency, usdBrl])
+    return computeDreFromSales(sales, { adSpend, toolSpend, productCostOf: () => 0 }).lucroLiquido
+  }, [metrics, expenses, sales, project.currency, usdBrl])
 
   const nameOf = (id: string) => profiles.find((p) => p.id === id)?.full_name || profiles.find((p) => p.id === id)?.username || "—"
   const totalPct = splits.reduce((s, x) => s + Number(x.percentage), 0)

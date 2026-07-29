@@ -2,14 +2,21 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { Creative, FunnelProduct, Project } from "@/lib/types"
+import type { Creative, Product, Project } from "@/lib/types"
 import { formatCurrency, formatNumber, safeDiv } from "@/lib/utils"
 import { creativeSemaphore } from "@/lib/finance"
-import { Card, CardContent, Button, Field, Input, Select, Badge } from "@/components/ui"
+import { Card, CardContent, Button, Field, Input, Select } from "@/components/ui"
 import { SemaphoreBadge } from "@/components/semaphore"
 import { Modal } from "@/components/modal"
-import { createCreative, updateCreativeStatus, deleteCreative } from "@/app/actions/projects"
-import { Plus, Trash2 } from "lucide-react"
+import { RowActions } from "@/components/row-actions"
+import {
+  createCreative,
+  updateCreative,
+  updateCreativeStatus,
+  duplicateCreative,
+  deleteCreative,
+} from "@/app/actions/projects"
+import { Plus } from "lucide-react"
 
 const STATUS: { value: Creative["status"]; label: string }[] = [
   { value: "testando", label: "Testando" },
@@ -21,26 +28,40 @@ const STATUS: { value: Creative["status"]; label: string }[] = [
 export function TabCreatives({
   project,
   creatives,
-  funnel,
+  products,
 }: {
   project: Project
   creatives: Creative[]
-  funnel: FunnelProduct[]
+  products: Product[]
 }) {
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Creative | null>(null)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string>()
   const router = useRouter()
 
   // orçamento de teste sugerido = margem do front-end * 1.75
-  const front = funnel.find((f) => f.kind === "front")
+  const front = products.find((f) => f.kind === "front")
   const testBudget = front ? (front.price - front.product_cost) * 1.75 : 0
   const cpaTarget = front ? (front.price - front.product_cost) * 0.7 : 0
+
+  function openNew() {
+    setEditing(null)
+    setError(undefined)
+    setOpen(true)
+  }
+  function openEdit(c: Creative) {
+    setEditing(c)
+    setError(undefined)
+    setOpen(true)
+  }
 
   function onSubmit(formData: FormData) {
     setError(undefined)
     startTransition(async () => {
-      const res = await createCreative(project.id, formData)
+      const res = editing
+        ? await updateCreative(project.id, editing.id, formData)
+        : await createCreative(project.id, formData)
       if (res?.error) setError(res.error)
       else {
         setOpen(false)
@@ -58,7 +79,7 @@ export function TabCreatives({
             {creatives.length} criativos · orçamento de teste sugerido {formatCurrency(testBudget)}
           </p>
         </div>
-        <Button size="sm" onClick={() => setOpen(true)}>
+        <Button size="sm" onClick={openNew}>
           <Plus size={16} /> Novo criativo
         </Button>
       </div>
@@ -82,18 +103,11 @@ export function TabCreatives({
                       <p className="truncate font-medium">{c.name}</p>
                       <SemaphoreBadge color={light} />
                     </div>
-                    <button
-                      onClick={() =>
-                        startTransition(async () => {
-                          await deleteCreative(project.id, c.id)
-                          router.refresh()
-                        })
-                      }
-                      className="text-muted transition-colors hover:text-negative"
-                      aria-label="Excluir criativo"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <RowActions
+                      onEdit={() => openEdit(c)}
+                      onDuplicate={() => duplicateCreative(project.id, c.id)}
+                      onDelete={() => deleteCreative(project.id, c.id)}
+                    />
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <Stat label="Gasto" value={formatCurrency(c.spend, project.currency)} />
@@ -124,31 +138,35 @@ export function TabCreatives({
         )}
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Novo criativo">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={editing ? "Editar criativo" : "Novo criativo"}
+      >
         <form action={onSubmit} className="flex flex-col gap-4">
           <Field label="Nome">
-            <Input name="name" placeholder="Ex: VSL headline azul" required />
+            <Input name="name" placeholder="Ex: VSL headline azul" defaultValue={editing?.name} required />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Status">
-              <Select name="status" defaultValue="testando">
+              <Select name="status" defaultValue={editing?.status ?? "testando"}>
                 {STATUS.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </Select>
             </Field>
             <Field label="Ativado em">
-              <Input name="activated_at" type="date" />
+              <Input name="activated_at" type="date" defaultValue={editing?.activated_at ?? ""} />
             </Field>
             <Field label="Gasto">
-              <Input name="spend" inputMode="decimal" placeholder="0,00" />
+              <Input name="spend" inputMode="decimal" placeholder="0,00" defaultValue={editing?.spend} />
             </Field>
             <Field label="Vendas">
-              <Input name="sales" inputMode="numeric" placeholder="0" />
+              <Input name="sales" inputMode="numeric" placeholder="0" defaultValue={editing?.sales} />
             </Field>
           </div>
           <Field label="Faturamento">
-            <Input name="revenue" inputMode="decimal" placeholder="0,00" />
+            <Input name="revenue" inputMode="decimal" placeholder="0,00" defaultValue={editing?.revenue} />
           </Field>
           {error ? <p className="text-sm text-negative">{error}</p> : null}
           <div className="flex justify-end gap-2">

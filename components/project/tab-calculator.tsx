@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import type { DailyMetric, Expense, FunnelProduct, Project } from "@/lib/types"
+import type { DailyMetric, Expense, Product, Project, Sale } from "@/lib/types"
 import { computeReal, type RealInputs } from "@/lib/finance"
 import { formatCurrency, formatNumber } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle, Field, Input } from "@/components/ui"
@@ -11,27 +11,33 @@ export function TabCalculator({
   project,
   metrics,
   expenses,
-  funnel,
+  sales,
+  products,
 }: {
   project: Project
   metrics: DailyMetric[]
   expenses: Expense[]
-  funnel: FunnelProduct[]
+  sales: Sale[]
+  products: Product[]
 }) {
-  // prefill a partir dos dados do projeto
-  const revenue = metrics.reduce((s, m) => s + m.revenue, 0)
-  const sales = metrics.reduce((s, m) => s + m.sales, 0)
+  // prefill a partir de vendas reais (fallback: métricas diárias)
+  const salesRevenue = sales.reduce((s, v) => s + v.gross_amount, 0)
+  const salesCount = sales.length
+  const metricRevenue = metrics.reduce((s, m) => s + m.revenue, 0)
+  const metricSalesCount = metrics.reduce((s, m) => s + m.sales, 0)
+  const revenue = salesRevenue || metricRevenue
+  const salesQty = salesCount || metricSalesCount
   const metricSpend = metrics.reduce((s, m) => s + m.spend, 0)
   const adSpend = expenses.filter((e) => e.type === "ads").reduce((s, e) => s + e.amount, 0)
-  const front = funnel.find((f) => f.kind === "front")
+  const front = products.find((f) => f.kind === "front")
 
   const [inputs, setInputs] = useState<RealInputs>({
     revenue: revenue || 0,
-    sales: sales || 0,
+    sales: salesQty || 0,
     spend: Math.max(metricSpend, adSpend) || 0,
     productCost: front?.product_cost ?? 0,
     gatewayPct: 5,
-    taxPct: 6,
+    taxPct: project.tax_pct || 6,
     targetMarginPct: 30,
   })
   const res = useMemo(() => computeReal(inputs), [inputs])

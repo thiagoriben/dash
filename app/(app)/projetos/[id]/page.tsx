@@ -5,7 +5,9 @@ import {
   getExpenses,
   getDailyMetrics,
   getCreatives,
-  getFunnelProducts,
+  getProducts,
+  getSales,
+  getPaymentGateways,
   getProfitSplits,
   getProfiles,
   getProjectMembers,
@@ -34,15 +36,18 @@ export default async function ProjectPage({
   const start = periodStartDate(period)
   const usdBrl = await getUsdBrlRate()
 
-  const [expenses, metrics, creatives, funnel, splits, profiles, members] = await Promise.all([
-    getExpenses([id], start),
-    getDailyMetrics([id], start),
-    getCreatives(id),
-    getFunnelProducts(id),
-    getProfitSplits(id),
-    getProfiles(),
-    getProjectMembers(id),
-  ])
+  const [expenses, metrics, creatives, products, sales, gateways, splits, profiles, members] =
+    await Promise.all([
+      getExpenses([id], start),
+      getDailyMetrics([id], start),
+      getCreatives(id),
+      getProducts(id),
+      getSales([id], start),
+      getPaymentGateways(profile.id),
+      getProfitSplits(id),
+      getProfiles(),
+      getProjectMembers(id),
+    ])
 
   const owner = profiles.find((p) => p.id === project.owner_id) ?? null
   const isOwner = project.owner_id === profile.id
@@ -53,12 +58,15 @@ export default async function ProjectPage({
       expenses={expenses}
       metrics={metrics}
       creatives={creatives}
-      funnel={funnel}
+      products={products}
+      sales={sales}
+      gateways={gateways}
       splits={splits}
       profiles={profiles}
       members={members}
       owner={owner}
       isOwner={isOwner}
+      prefs={profile.prefs}
       usdBrl={usdBrl}
     />
   )

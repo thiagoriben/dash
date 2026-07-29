@@ -6,6 +6,7 @@ export type Profile = {
   full_name: string | null
   phone: string | null
   role: "admin" | "member"
+  prefs: Prefs | null
   created_at: string
 }
 
@@ -18,7 +19,17 @@ export type Project = {
   status: "ativo" | "pausado" | "encerrado"
   visibility: "privado" | "publico" | "restrito"
   owner_id: string | null
+  tax_pct: number
   created_at: string
+}
+
+export type Prefs = {
+  region?: string
+  offer_type?: string
+  currency?: Currency
+  payment_method?: string
+  source?: string
+  gateway_id?: string
 }
 
 export type Expense = {
@@ -75,4 +86,60 @@ export type ProfitSplit = {
   project_id: string
   user_id: string
   percentage: number
+}
+
+export type ProductKind = "front" | "upsell" | "orderbump" | "downsell"
+
+export type PaymentGateway = {
+  id: string
+  owner_id: string
+  name: string
+  fee_pct: number
+  fee_fixed: number
+  created_at: string
+}
+
+export type Product = {
+  id: string
+  project_id: string
+  name: string
+  kind: ProductKind
+  price: number
+  product_cost: number
+  gateway_id: string | null
+  in_funnel: boolean
+  position: number
+  created_at: string
+}
+
+export type Sale = {
+  id: string
+  project_id: string
+  product_id: string | null
+  gateway_id: string | null
+  gross_amount: number
+  apply_gateway_fee: boolean
+  fee_amount: number
+  tax_amount: number
+  net_amount: number
+  payment_method: string
+  source: string | null
+  sold_at: string
+  notes: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export type CashEntry = {
+  id: string
+  owner_id: string
+  project_id: string | null
+  direction: "entrada" | "saida"
+  amount: number
+  category: string | null
+  description: string | null
+  occurred_at: string
+  sale_id: string | null
+  created_by: string | null
+  created_at: string
 }

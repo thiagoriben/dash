@@ -27,6 +27,20 @@ export function semaphoreFromRoas(roasValue: number, min = 1, target = 2): Semap
   return "red"
 }
 
+/** ---- Cálculo do líquido de uma venda ---- */
+export function computeSaleNet(input: {
+  gross: number
+  applyFee: boolean
+  feePct: number // % gateway (0-100)
+  feeFixed: number // taxa fixa gateway
+  taxPct: number // % imposto (0-100)
+}) {
+  const fee = input.applyFee ? input.gross * (input.feePct / 100) + input.feeFixed : 0
+  const tax = input.gross * (input.taxPct / 100)
+  const net = Math.max(0, input.gross - fee - tax)
+  return { fee, tax, net }
+}
+
 /** ---- Calculadora: Modo Real ---- */
 export type RealInputs = {
   revenue: number // faturamento
@@ -178,6 +192,56 @@ export function computeDre(i: DreInput) {
     i.revenue - i.productCost - i.gatewayFees - i.taxes - i.adSpend - i.toolSpend
   const margem = safeDiv(lucroLiquido, i.revenue) * 100
   return { lucroLiquido, margem }
+}
+
+/** ---- DRE consolidado a partir de vendas reais + gastos ---- */
+export type SaleLike = {
+  gross_amount: number
+  fee_amount: number
+  tax_amount: number
+  product_id: string | null
+}
+export type DreConsolidated = {
+  revenue: number
+  productCost: number
+  gatewayFees: number
+  taxes: number
+  adSpend: number
+  toolSpend: number
+  lucroLiquido: number
+  margem: number
+}
+
+/**
+ * Calcula o DRE do período usando as vendas registradas (bruto, taxas e impostos
+ * já persistidos por venda) e os gastos. `productCostOf` mapeia product_id -> custo.
+ */
+export function computeDreFromSales(
+  sales: SaleLike[],
+  opts: { adSpend: number; toolSpend: number; productCostOf: (id: string | null) => number },
+): DreConsolidated {
+  const revenue = sales.reduce((s, v) => s + v.gross_amount, 0)
+  const gatewayFees = sales.reduce((s, v) => s + v.fee_amount, 0)
+  const taxes = sales.reduce((s, v) => s + v.tax_amount, 0)
+  const productCost = sales.reduce((s, v) => s + opts.productCostOf(v.product_id), 0)
+  const { lucroLiquido, margem } = computeDre({
+    revenue,
+    productCost,
+    gatewayFees,
+    taxes,
+    adSpend: opts.adSpend,
+    toolSpend: opts.toolSpend,
+  })
+  return {
+    revenue,
+    productCost,
+    gatewayFees,
+    taxes,
+    adSpend: opts.adSpend,
+    toolSpend: opts.toolSpend,
+    lucroLiquido,
+    margem,
+  }
 }
 
 /** ---- Diagnóstico de funil ---- */

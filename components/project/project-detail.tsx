@@ -6,10 +6,13 @@ import type {
   Creative,
   DailyMetric,
   Expense,
-  FunnelProduct,
+  PaymentGateway,
+  Prefs,
+  Product,
   Profile,
   Project,
   ProfitSplit,
+  Sale,
 } from "@/lib/types"
 import { Badge } from "@/components/ui"
 import { ChevronLeft } from "lucide-react"
@@ -22,10 +25,14 @@ import { TabFunnel } from "./tab-funnel"
 import { TabDre } from "./tab-dre"
 import { TabSplits } from "./tab-splits"
 import { TabMembers } from "./tab-members"
+import { TabProducts } from "./tab-products"
+import { TabSales } from "./tab-sales"
 import type { ProjectMemberWithProfile } from "@/lib/data"
 
 const TABS = [
   "Visão geral",
+  "Vendas",
+  "Produtos",
   "Gastos",
   "Criativos",
   "Calculadora",
@@ -41,12 +48,15 @@ export function ProjectDetail(props: {
   expenses: Expense[]
   metrics: DailyMetric[]
   creatives: Creative[]
-  funnel: FunnelProduct[]
+  products: Product[]
+  sales: Sale[]
+  gateways: PaymentGateway[]
   splits: ProfitSplit[]
   profiles: Profile[]
   members: ProjectMemberWithProfile[]
   owner: Profile | null
   isOwner: boolean
+  prefs: Prefs | null
   usdBrl: number
 }) {
   const { project } = props
@@ -101,33 +111,48 @@ export function ProjectDetail(props: {
             project={project}
             metrics={props.metrics}
             expenses={props.expenses}
+            sales={props.sales}
             usdBrl={props.usdBrl}
           />
+        )}
+        {tab === "Vendas" && (
+          <TabSales
+            project={project}
+            sales={props.sales}
+            products={props.products}
+            gateways={props.gateways}
+            prefs={props.prefs}
+          />
+        )}
+        {tab === "Produtos" && (
+          <TabProducts project={project} products={props.products} gateways={props.gateways} />
         )}
         {tab === "Gastos" && (
           <TabExpenses project={project} expenses={props.expenses} usdBrl={props.usdBrl} />
         )}
         {tab === "Criativos" && (
-          <TabCreatives project={project} creatives={props.creatives} funnel={props.funnel} />
+          <TabCreatives project={project} creatives={props.creatives} products={props.products} />
         )}
         {tab === "Calculadora" && (
           <TabCalculator
             project={project}
             metrics={props.metrics}
             expenses={props.expenses}
-            funnel={props.funnel}
+            sales={props.sales}
+            products={props.products}
           />
         )}
         {tab === "Funil" && (
-          <TabFunnel project={project} funnel={props.funnel} metrics={props.metrics} />
+          <TabFunnel project={project} products={props.products} metrics={props.metrics} />
         )}
         {tab === "DRE" && (
           <TabDre
             project={project}
             metrics={props.metrics}
             expenses={props.expenses}
-            funnel={props.funnel}
+            sales={props.sales}
             usdBrl={props.usdBrl}
+            isOwner={props.isOwner}
           />
         )}
         {tab === "Repartição" && (
@@ -137,7 +162,7 @@ export function ProjectDetail(props: {
             profiles={props.profiles}
             metrics={props.metrics}
             expenses={props.expenses}
-            funnel={props.funnel}
+            sales={props.sales}
             usdBrl={props.usdBrl}
           />
         )}

@@ -1,12 +1,15 @@
 import { createClient } from "@/lib/supabase/server"
 import type {
+  CashEntry,
   Creative,
   DailyMetric,
   Expense,
-  FunnelProduct,
+  PaymentGateway,
+  Product,
   Profile,
   Project,
   ProfitSplit,
+  Sale,
 } from "./types"
 
 export type Period = "7d" | "30d" | "90d" | "ano" | "tudo"
@@ -43,6 +46,22 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     .select("*")
     .maybeSingle()
   return (created as Profile) ?? null
+}
+
+/** Mescla e salva preferências do usuário (última escolha vira padrão). */
+export async function savePrefs(patch: Record<string, string | undefined>) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+  const { data } = await supabase.from("profiles").select("prefs").eq("id", user.id).maybeSingle()
+  const current = (data?.prefs ?? {}) as Record<string, unknown>
+  const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v != null && v !== ""))
+  await supabase
+    .from("profiles")
+    .update({ prefs: { ...current, ...clean } })
+    .eq("id", user.id)
 }
 
 export async function getProfiles(): Promise<Profile[]> {
@@ -111,16 +130,6 @@ export async function getCreatives(projectId: string): Promise<Creative[]> {
   return (data ?? []) as Creative[]
 }
 
-export async function getFunnelProducts(projectId: string): Promise<FunnelProduct[]> {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from("funnel_products")
-    .select("*")
-    .eq("project_id", projectId)
-    .order("created_at")
-  return (data ?? []) as FunnelProduct[]
-}
-
 export async function getProfitSplits(projectId: string): Promise<ProfitSplit[]> {
   const supabase = await createClient()
   const { data } = await supabase.from("profit_splits").select("*").eq("project_id", projectId)
@@ -146,4 +155,63 @@ export async function getProjectMembers(projectId: string): Promise<ProjectMembe
     role: m.role,
     profile: (m.profile ?? null) as Profile | null,
   }))
+}
+
+/* ---------- Gateways de pagamento (global do usuário) ---------- */
+const DEFAULT_GATEWAYS = ["Hotmart", "Wiapy", "B3", "Paradise"]
+
+export async function getPaymentGateways(ownerId: string): Promise<PaymentGateway[]> {
+  const supabase = await createClient()
+  let { data } = await supabase
+    .from("payment_gateways")
+    .select("*")
+    .eq("owner_id", ownerId)
+    .order("name")
+
+  // Semeia os gateways padrão uma única vez.
+  if (!data || data.length === 0) {
+    await supabase
+      .from("payment_gateways")
+      .insert(DEFAULT_GATEWAYS.map((name) => ({ owner_id: ownerId, name })))
+    const res = await supabase
+      .from("payment_gateways")
+      .select("*")
+      .eq("owner_id", ownerId)
+      .order("name")
+    data = res.data
+  }
+  return (data ?? []) as PaymentGateway[]
+}
+
+/* ---------- Produtos ---------- */
+export async function getProducts(projectId: string): Promise<Product[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("products")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("position")
+    .order("created_at")
+  return (data ?? []) as Product[]
+}
+
+/* ---------- Vendas ---------- */
+export async function getSales(projectIds: string[], start: string | null): Promise<Sale[]> {
+  if (projectIds.length === 0) return []
+  const supabase = await createClient()
+  let q = supabase.from("sales").select("*").in("project_id", projectIds)
+  if (start) q = q.gte("sold_at", start)
+  const { data } = await q.order("sold_at", { ascending: false })
+  return (data ?? []) as Sale[]
+}
+
+/* ---------- Caixa ---------- */
+export async function getCashEntries(profile: Profile | null): Promise<CashEntry[]> {
+  if (!profile) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("cash_entries")
+    .select("*")
+    .order("occurred_at", { ascending: false })
+  return (data ?? []) as CashEntry[]
 }
