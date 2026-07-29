@@ -7,15 +7,17 @@ import {
   getExpenses,
   getDailyMetrics,
   getSales,
-  periodStartDate,
+  resolveRange,
   type Period,
 } from "@/lib/data"
 import { getUsdBrlRate } from "@/lib/currency-server"
+import { DEFAULT_CURRENCIES, DEFAULT_REGIONS } from "@/lib/currency"
 import { aggregateTotals, timeSeries, rankProjects } from "@/lib/aggregate"
 import { formatCurrency, formatNumber } from "@/lib/utils"
 import { KpiCard } from "@/components/kpi-card"
 import { SpendRevenueChart } from "@/components/spend-revenue-chart"
 import { DashboardFilters } from "@/components/dashboard-filters"
+import { DateRangeFilter } from "@/components/date-range-filter"
 import { Card, CardContent, CardHeader, CardTitle, Badge } from "@/components/ui"
 import { AlertsPanel } from "@/components/alerts-panel"
 import { Wallet, TrendingUp, PiggyBank, Target, Rocket, Trophy } from "lucide-react"
@@ -30,7 +32,7 @@ export default async function DashboardPage({
   if (!profile) redirect("/login")
 
   const period = (sp.period as Period) ?? "30d"
-  const start = periodStartDate(period)
+  const { from, to } = resolveRange(period, { from: sp.from ?? null, to: sp.to ?? null })
   const usdBrl = await getUsdBrlRate()
 
   const [allProjects, ownedIds] = await Promise.all([
@@ -38,18 +40,21 @@ export default async function DashboardPage({
     getOwnedProjectIds(profile),
   ])
 
-  // aplica filtros
+  // aplica filtros (região/moeda case-insensitive)
   let projects = allProjects
   if (sp.project) projects = projects.filter((p) => p.id === sp.project)
-  if (sp.region) projects = projects.filter((p) => p.region === sp.region)
-  if (sp.currency) projects = projects.filter((p) => p.currency === sp.currency)
-  if (sp.offer) projects = projects.filter((p) => p.offer_type === sp.offer)
+  if (sp.region)
+    projects = projects.filter((p) => p.region?.toLowerCase() === sp.region!.toLowerCase())
+  if (sp.currency)
+    projects = projects.filter((p) => p.currency?.toUpperCase() === sp.currency!.toUpperCase())
+  if (sp.offer)
+    projects = projects.filter((p) => p.offer_type?.toLowerCase() === sp.offer!.toLowerCase())
 
   const projectIds = projects.map((p) => p.id)
   const [expenses, metrics, sales] = await Promise.all([
-    getExpenses(projectIds, start),
-    getDailyMetrics(projectIds, start),
-    getSales(projectIds, start),
+    getExpenses(projectIds, from, to),
+    getDailyMetrics(projectIds, from, to),
+    getSales(projectIds, from, to),
   ])
 
   // Filtro de tipos de gasto (ex.: só "ads" para ignorar ferramentas/pagamentos).
@@ -66,6 +71,8 @@ export default async function DashboardPage({
   const offerTypes = Array.from(
     new Set(allProjects.map((p) => p.offer_type).filter(Boolean) as string[]),
   )
+  const regions = profile.prefs?.regions?.length ? profile.prefs.regions : DEFAULT_REGIONS
+  const currencies = profile.prefs?.currencies?.length ? profile.prefs.currencies : DEFAULT_CURRENCIES
 
   return (
     <div className="flex flex-col gap-6">
@@ -98,7 +105,15 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
       ) : (
-        <DashboardFilters projects={allProjects} offerTypes={offerTypes} />
+        <div className="flex flex-col gap-3">
+          <DateRangeFilter />
+          <DashboardFilters
+            projects={allProjects}
+            offerTypes={offerTypes}
+            regions={regions}
+            currencies={currencies}
+          />
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">

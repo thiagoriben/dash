@@ -10,7 +10,7 @@ import { RowActions } from "@/components/row-actions"
 import { saveGateway, deleteGateway } from "@/app/actions/projects"
 import { Plus, CreditCard } from "lucide-react"
 
-export function ConfigClient({ gateways }: { gateways: PaymentGateway[] }) {
+export function GatewaysClient({ gateways }: { gateways: PaymentGateway[] }) {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<PaymentGateway | null>(null)
   const [error, setError] = useState<string>()
@@ -43,10 +43,10 @@ export function ConfigClient({ gateways }: { gateways: PaymentGateway[] }) {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-semibold">Configurações</h1>
+        <h1 className="font-display text-2xl font-semibold">Gateways de pagamento</h1>
         <p className="text-sm text-muted">
-          Gateways de pagamento e suas taxas. As taxas configuradas aqui são deduzidas
-          automaticamente do valor bruto ao registrar uma venda.
+          Taxas e prazos de recebimento por gateway. As taxas são deduzidas do bruto ao registrar
+          uma venda, e os prazos definem quando o valor entra (projeção de recebíveis).
         </p>
       </header>
 
@@ -54,7 +54,7 @@ export function ConfigClient({ gateways }: { gateways: PaymentGateway[] }) {
         <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-5 py-4">
           <div className="flex items-center gap-2">
             <CreditCard size={18} className="text-primary" />
-            <h2 className="font-medium">Gateways de pagamento</h2>
+            <h2 className="font-medium">Gateways</h2>
           </div>
           <Button size="sm" onClick={openNew}>
             <Plus size={16} /> Novo gateway
@@ -70,6 +70,8 @@ export function ConfigClient({ gateways }: { gateways: PaymentGateway[] }) {
                   <Th>Gateway</Th>
                   <Th>Taxa %</Th>
                   <Th>Taxa fixa</Th>
+                  <Th>Prazo pix</Th>
+                  <Th>Prazo cartão</Th>
                   <Th className="text-right">Ações</Th>
                 </tr>
               </thead>
@@ -79,6 +81,8 @@ export function ConfigClient({ gateways }: { gateways: PaymentGateway[] }) {
                     <Td className="font-medium">{g.name}</Td>
                     <Td>{formatPercent(g.fee_pct)}</Td>
                     <Td>{formatCurrency(g.fee_fixed)}</Td>
+                    <Td>{g.term_days_pix === 0 ? "na hora" : `${g.term_days_pix} dias`}</Td>
+                    <Td>{g.term_days_card === 0 ? "na hora" : `${g.term_days_card} dias`}</Td>
                     <Td className="text-right">
                       <RowActions
                         onEdit={() => openEdit(g)}
@@ -110,7 +114,26 @@ export function ConfigClient({ gateways }: { gateways: PaymentGateway[] }) {
             <Field label="Taxa fixa (R$)">
               <Input name="fee_fixed" inputMode="decimal" placeholder="0,00" defaultValue={editing?.fee_fixed} />
             </Field>
+            <Field label="Prazo pix (dias)">
+              <Input
+                name="term_days_pix"
+                inputMode="numeric"
+                placeholder="0"
+                defaultValue={editing?.term_days_pix}
+              />
+            </Field>
+            <Field label="Prazo cartão (dias)">
+              <Input
+                name="term_days_card"
+                inputMode="numeric"
+                placeholder="0"
+                defaultValue={editing?.term_days_card}
+              />
+            </Field>
           </div>
+          <p className="text-xs text-muted">
+            Prazo 0 = recebimento na hora. Ex: cartão D+30, pix na hora.
+          </p>
           {error && <p className="text-sm text-negative">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>

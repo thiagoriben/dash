@@ -7,13 +7,17 @@ import {
   getCreatives,
   getProducts,
   getSales,
+  getReceivables,
+  getAdAccounts,
+  getCardCharges,
   getPaymentGateways,
   getProfitSplits,
   getProfiles,
   getProjectMembers,
-  periodStartDate,
+  resolveRange,
   type Period,
 } from "@/lib/data"
+import { getActivity } from "@/lib/activity"
 import { getUsdBrlRate } from "@/lib/currency-server"
 import { ProjectDetail } from "@/components/project/project-detail"
 
@@ -33,21 +37,38 @@ export default async function ProjectPage({
   if (!project) notFound()
 
   const period = (sp.period as Period) ?? "30d"
-  const start = periodStartDate(period)
+  const { from, to } = resolveRange(period, { from: sp.from ?? null, to: sp.to ?? null })
   const usdBrl = await getUsdBrlRate()
 
-  const [expenses, metrics, creatives, products, sales, gateways, splits, profiles, members] =
-    await Promise.all([
-      getExpenses([id], start),
-      getDailyMetrics([id], start),
-      getCreatives(id),
-      getProducts(id),
-      getSales([id], start),
-      getPaymentGateways(profile.id),
-      getProfitSplits(id),
-      getProfiles(),
-      getProjectMembers(id),
-    ])
+  const [
+    expenses,
+    metrics,
+    creatives,
+    products,
+    sales,
+    receivables,
+    adAccounts,
+    cardCharges,
+    gateways,
+    splits,
+    profiles,
+    members,
+    activity,
+  ] = await Promise.all([
+    getExpenses([id], from, to),
+    getDailyMetrics([id], from, to),
+    getCreatives(id),
+    getProducts(id),
+    getSales([id], from, to),
+    getReceivables([id]),
+    getAdAccounts(id),
+    getCardCharges([id], from, to),
+    getPaymentGateways(profile.id),
+    getProfitSplits(id),
+    getProfiles(),
+    getProjectMembers(id),
+    getActivity({ projectId: id, limit: 60 }),
+  ])
 
   const owner = profiles.find((p) => p.id === project.owner_id) ?? null
   const isOwner = project.owner_id === profile.id
@@ -60,10 +81,14 @@ export default async function ProjectPage({
       creatives={creatives}
       products={products}
       sales={sales}
+      receivables={receivables}
+      adAccounts={adAccounts}
+      cardCharges={cardCharges}
       gateways={gateways}
       splits={splits}
       profiles={profiles}
       members={members}
+      activity={activity}
       owner={owner}
       isOwner={isOwner}
       prefs={profile.prefs}

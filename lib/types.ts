@@ -1,4 +1,5 @@
-export type Currency = "BRL" | "USD"
+/** Moeda: código ISO em maiúsculo ("BRL", "USD", ...). Aceita qualquer código cadastrado. */
+export type Currency = string
 
 export type Profile = {
   id: string
@@ -30,6 +31,12 @@ export type Prefs = {
   payment_method?: string
   source?: string
   gateway_id?: string
+  /** Listas editáveis (globais) em minúsculo. */
+  regions?: string[]
+  currencies?: string[]
+  offer_types?: string[]
+  sources?: string[]
+  sidebar_collapsed?: boolean
 }
 
 export type Expense = {
@@ -66,9 +73,11 @@ export type DailyMetric = {
   spend: number
   impressions: number
   clicks: number
+  page_views: number
   checkouts_initiated: number
   sales: number
   revenue: number
+  ad_account_id: string | null
 }
 
 export type FunnelProduct = {
@@ -96,6 +105,8 @@ export type PaymentGateway = {
   name: string
   fee_pct: number
   fee_fixed: number
+  term_days_pix: number
+  term_days_card: number
   created_at: string
 }
 
@@ -116,6 +127,7 @@ export type Sale = {
   id: string
   project_id: string
   product_id: string | null
+  creative_id: string | null
   gateway_id: string | null
   gross_amount: number
   apply_gateway_fee: boolean
@@ -125,8 +137,44 @@ export type Sale = {
   payment_method: string
   source: string | null
   sold_at: string
+  has_term: boolean
+  receivable_date: string | null
+  received: boolean
   notes: string | null
   created_by: string | null
+  created_at: string
+}
+
+export type AdAccount = {
+  id: string
+  project_id: string
+  bm_name: string | null
+  account_name: string
+  created_at: string
+}
+
+export type CardCharge = {
+  id: string
+  project_id: string
+  ad_account_id: string | null
+  amount: number
+  charged_at: string
+  notes: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export type ActivityLog = {
+  id: string
+  project_id: string | null
+  owner_id: string | null
+  actor_id: string | null
+  actor_name: string | null
+  action: string
+  entity: string | null
+  entity_id: string | null
+  summary: string | null
+  meta: Record<string, unknown>
   created_at: string
 }
 

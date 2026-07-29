@@ -9,9 +9,13 @@ import { Filter } from "lucide-react"
 export function DashboardFilters({
   projects,
   offerTypes,
+  regions,
+  currencies,
 }: {
   projects: Project[]
   offerTypes: string[]
+  regions: string[]
+  currencies: string[]
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -52,10 +56,11 @@ export function DashboardFilters({
         className="h-9 w-auto"
       >
         <option value="">Região</option>
-        <option value="BR">BR</option>
-        <option value="LATAM">LATAM</option>
-        <option value="MUNDO">MUNDO</option>
-        <option value="EUA">EUA</option>
+        {regions.map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
       </Select>
       <Select
         aria-label="Gastos considerados"
@@ -74,8 +79,11 @@ export function DashboardFilters({
         className="h-9 w-auto"
       >
         <option value="">Moeda</option>
-        <option value="BRL">BRL</option>
-        <option value="USD">USD</option>
+        {currencies.map((c) => (
+          <option key={c} value={c.toUpperCase()}>
+            {c.toUpperCase()}
+          </option>
+        ))}
       </Select>
       {offerTypes.length > 0 ? (
         <Select

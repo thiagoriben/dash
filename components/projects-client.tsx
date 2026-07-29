@@ -9,9 +9,7 @@ import { Button, Badge, Field, Input, Select, Card } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { SelectOrOther } from "@/components/select-or-other"
 import { Plus, FolderKanban, Globe, Lock, Users, ArrowUpRight } from "lucide-react"
-
-const REGIONS = ["BR", "LATAM", "MUNDO", "EUA"]
-const OFFERS = ["X1", "Tráfego direto"]
+import { DEFAULT_CURRENCIES, DEFAULT_OFFER_TYPES, DEFAULT_REGIONS } from "@/lib/currency"
 
 const statusTone = {
   ativo: "positive",
@@ -32,6 +30,10 @@ export function ProjectsClient({
   const [error, setError] = useState<string>()
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+
+  const regions = prefs?.regions?.length ? prefs.regions : DEFAULT_REGIONS
+  const offers = prefs?.offer_types?.length ? prefs.offer_types : DEFAULT_OFFER_TYPES
+  const currencies = prefs?.currencies?.length ? prefs.currencies : DEFAULT_CURRENCIES
 
   function onSubmit(formData: FormData) {
     setError(undefined)
@@ -118,8 +120,8 @@ export function ProjectsClient({
           <Field label="Tipo de oferta">
             <SelectOrOther
               name="offer_type"
-              options={OFFERS}
-              defaultValue={prefs?.offer_type ?? "X1"}
+              options={offers}
+              defaultValue={prefs?.offer_type ?? offers[0]}
               placeholder="Descreva o tipo de oferta"
             />
           </Field>
@@ -127,16 +129,18 @@ export function ProjectsClient({
             <Field label="Região">
               <SelectOrOther
                 name="region"
-                options={REGIONS}
-                defaultValue={prefs?.region ?? "BR"}
+                options={regions}
+                defaultValue={prefs?.region ?? regions[0]}
                 placeholder="Descreva a região"
               />
             </Field>
             <Field label="Moeda">
-              <Select name="currency" defaultValue={prefs?.currency ?? "BRL"}>
-                <option value="BRL">BRL (R$)</option>
-                <option value="USD">USD (US$)</option>
-              </Select>
+              <SelectOrOther
+                name="currency"
+                options={currencies}
+                defaultValue={prefs?.currency?.toLowerCase() ?? currencies[0]}
+                placeholder="Ex: brl"
+              />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">

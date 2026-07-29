@@ -244,6 +244,54 @@ export function computeDreFromSales(
   }
 }
 
+/** ---- Imposto do tráfego = cobrança no cartão − gasto em anúncio ---- */
+export function computeTrafficTax(adSpend: number, cardCharged: number) {
+  const tax = Math.max(0, cardCharged - adSpend)
+  const pct = safeDiv(tax, adSpend) * 100
+  return { adSpend, cardCharged, tax, pct }
+}
+
+/** ---- Recebíveis: calcula a data de recebimento a partir do prazo do gateway ---- */
+export function addDays(dateISO: string, days: number): string {
+  const base = new Date(dateISO + (dateISO.length === 10 ? "T00:00:00" : ""))
+  base.setDate(base.getDate() + days)
+  return base.toISOString().slice(0, 10)
+}
+
+export function receivableDateFor(
+  soldAt: string,
+  method: string,
+  gateway: { term_days_pix: number; term_days_card: number } | null | undefined,
+): { date: string; hasTerm: boolean } {
+  if (!gateway) return { date: soldAt, hasTerm: false }
+  const isCard = /cart/i.test(method) || method === "cartao" || method === "credit"
+  const days = isCard ? gateway.term_days_card : gateway.term_days_pix
+  return { date: addDays(soldAt, days), hasTerm: days > 0 }
+}
+
+/** Agrupa valores a receber por data (líquido), somente vendas ainda não recebidas. */
+export function groupReceivablesByDate(
+  sales: {
+    receivable_date: string | null
+    sold_at: string
+    net_amount: number
+    received: boolean
+  }[],
+): { date: string; amount: number; count: number }[] {
+  const map = new Map<string, { amount: number; count: number }>()
+  for (const s of sales) {
+    if (s.received) continue
+    const date = s.receivable_date ?? s.sold_at
+    const cur = map.get(date) ?? { amount: 0, count: 0 }
+    cur.amount += s.net_amount
+    cur.count += 1
+    map.set(date, cur)
+  }
+  return [...map.entries()]
+    .map(([date, v]) => ({ date, ...v }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
 /** ---- Diagnóstico de funil ---- */
 export function diagnoseFunnel(m: {
   impressions: number

@@ -3,15 +3,36 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { getCurrentProfile, savePrefs } from "@/lib/data"
-import { computeSaleNet } from "@/lib/finance"
+import { computeSaleNet, receivableDateFor } from "@/lib/finance"
+import { normalizeCurrency } from "@/lib/currency"
+import { logActivity } from "@/lib/activity"
 
 const num = (v: FormDataEntryValue | null) =>
   Number.parseFloat(String(v ?? "0").replace(",", ".")) || 0
+
+const int = (v: FormDataEntryValue | null) => Number.parseInt(String(v ?? "0"), 10) || 0
 
 /** Checkbox com hidden "off" antes: pega o último valor enviado. */
 const checkbox = (formData: FormData, name: string) => {
   const all = formData.getAll(name)
   return all[all.length - 1] === "on"
+}
+
+/* ---------- Preferências globais (listas editáveis, sidebar) ---------- */
+export async function saveListPref(
+  key: "regions" | "currencies" | "offer_types" | "sources",
+  values: string[],
+) {
+  const clean = [...new Set(values.map((v) => v.trim().toLowerCase()).filter(Boolean))]
+  await savePrefs({ [key]: clean })
+  revalidatePath("/config")
+  revalidatePath("/projetos")
+  return { ok: true }
+}
+
+export async function setSidebarCollapsed(collapsed: boolean) {
+  await savePrefs({ sidebar_collapsed: collapsed })
+  return { ok: true }
 }
 
 export async function createProject(formData: FormData) {
@@ -22,22 +43,34 @@ export async function createProject(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim()
   if (!name) return { error: "Informe o nome do projeto." }
 
-  const region = String(formData.get("region") ?? "BR")
-  const offer_type = String(formData.get("offer_type") ?? "") || null
-  const currency = String(formData.get("currency") ?? "BRL")
+  const region = String(formData.get("region") ?? "br").toLowerCase()
+  const offer_type = String(formData.get("offer_type") ?? "").toLowerCase() || null
+  const currency = normalizeCurrency(String(formData.get("currency") ?? "brl"))
 
-  const { error } = await supabase.from("projects").insert({
-    name,
-    offer_type,
-    region,
-    currency,
-    status: String(formData.get("status") ?? "ativo"),
-    visibility: String(formData.get("visibility") ?? "privado"),
-    owner_id: profile.id,
-  })
+  const { data: created, error } = await supabase
+    .from("projects")
+    .insert({
+      name,
+      offer_type,
+      region,
+      currency,
+      status: String(formData.get("status") ?? "ativo"),
+      visibility: String(formData.get("visibility") ?? "privado"),
+      owner_id: profile.id,
+    })
+    .select("id")
+    .maybeSingle()
   if (error) return { error: error.message }
 
   await savePrefs({ region, offer_type: offer_type ?? undefined, currency })
+  await logActivity({
+    actor: profile,
+    action: "create",
+    entity: "project",
+    entityId: created?.id ?? null,
+    projectId: created?.id ?? null,
+    summary: `Criou o projeto "${name}"`,
+  })
   revalidatePath("/projetos")
   revalidatePath("/")
   return { ok: true }
@@ -45,17 +78,27 @@ export async function createProject(formData: FormData) {
 
 export async function updateProject(id: string, formData: FormData) {
   const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  const name = String(formData.get("name") ?? "").trim()
   const patch: Record<string, unknown> = {
-    name: String(formData.get("name") ?? "").trim(),
-    offer_type: String(formData.get("offer_type") ?? "") || null,
-    region: String(formData.get("region") ?? "BR"),
-    currency: String(formData.get("currency") ?? "BRL"),
+    name,
+    offer_type: String(formData.get("offer_type") ?? "").toLowerCase() || null,
+    region: String(formData.get("region") ?? "br").toLowerCase(),
+    currency: normalizeCurrency(String(formData.get("currency") ?? "brl")),
     status: String(formData.get("status") ?? "ativo"),
     visibility: String(formData.get("visibility") ?? "privado"),
   }
   if (formData.has("tax_pct")) patch.tax_pct = num(formData.get("tax_pct"))
   const { error } = await supabase.from("projects").update(patch).eq("id", id)
   if (error) return { error: error.message }
+  await logActivity({
+    actor: profile,
+    action: "update",
+    entity: "project",
+    entityId: id,
+    projectId: id,
+    summary: `Editou o projeto "${name}"`,
+  })
   revalidatePath(`/projetos/${id}`)
   revalidatePath("/projetos")
   return { ok: true }
@@ -132,7 +175,15 @@ export async function createExpense(projectId: string, formData: FormData) {
     created_by: profile?.id ?? null,
   })
   if (error) return { error: error.message }
+  await logActivity({
+    actor: profile,
+    action: "create",
+    entity: "expense",
+    projectId,
+    summary: `Lançou gasto de ${amount.toFixed(2)}`,
+  })
   revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/")
   return { ok: true }
 }
 
@@ -209,25 +260,102 @@ export async function deleteCreative(projectId: string, id: string) {
   return { ok: true }
 }
 
-/* ---------- Métricas diárias ---------- */
+/* ---------- Métricas diárias (todas opcionais) ---------- */
 export async function upsertDailyMetric(projectId: string, formData: FormData) {
   const supabase = await createClient()
+  const profile = await getCurrentProfile()
   const date = String(formData.get("date") ?? new Date().toISOString().slice(0, 10))
   const { error } = await supabase.from("daily_metrics").upsert(
     {
       project_id: projectId,
       date,
-      spend: Number.parseFloat(String(formData.get("spend") ?? "0").replace(",", ".")) || 0,
-      impressions: Number.parseInt(String(formData.get("impressions") ?? "0"), 10) || 0,
-      clicks: Number.parseInt(String(formData.get("clicks") ?? "0"), 10) || 0,
-      checkouts_initiated:
-        Number.parseInt(String(formData.get("checkouts_initiated") ?? "0"), 10) || 0,
-      sales: Number.parseInt(String(formData.get("sales") ?? "0"), 10) || 0,
-      revenue: Number.parseFloat(String(formData.get("revenue") ?? "0").replace(",", ".")) || 0,
+      spend: num(formData.get("spend")),
+      impressions: int(formData.get("impressions")),
+      clicks: int(formData.get("clicks")),
+      page_views: int(formData.get("page_views")),
+      checkouts_initiated: int(formData.get("checkouts_initiated")),
+      sales: int(formData.get("sales")),
+      revenue: num(formData.get("revenue")),
+      ad_account_id: String(formData.get("ad_account_id") ?? "") || null,
     },
     { onConflict: "project_id,date" },
   )
   if (error) return { error: error.message }
+  await logActivity({
+    actor: profile,
+    action: "update",
+    entity: "daily_metric",
+    projectId,
+    summary: `Atualizou métricas de ${date}`,
+  })
+  revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/")
+  return { ok: true }
+}
+
+/* ---------- Contas de anúncio (BM + conta) ---------- */
+export async function saveAdAccount(projectId: string, formData: FormData) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  const id = String(formData.get("id") ?? "")
+  const accountName = String(formData.get("account_name") ?? "").trim()
+  if (!accountName) return { error: "Informe o nome da conta." }
+  const payload = {
+    bm_name: String(formData.get("bm_name") ?? "") || null,
+    account_name: accountName,
+  }
+  const { error } = id
+    ? await supabase.from("ad_accounts").update(payload).eq("id", id)
+    : await supabase.from("ad_accounts").insert({ ...payload, project_id: projectId })
+  if (error) return { error: error.message }
+  await logActivity({
+    actor: profile,
+    action: id ? "update" : "create",
+    entity: "ad_account",
+    projectId,
+    summary: `${id ? "Editou" : "Adicionou"} conta de anúncio "${accountName}"`,
+  })
+  revalidatePath(`/projetos/${projectId}`)
+  return { ok: true }
+}
+
+export async function deleteAdAccount(projectId: string, id: string) {
+  const supabase = await createClient()
+  await supabase.from("ad_accounts").delete().eq("id", id)
+  revalidatePath(`/projetos/${projectId}`)
+  return { ok: true }
+}
+
+/* ---------- Cobranças no cartão (imposto = cobrança - gasto) ---------- */
+export async function createCardCharge(projectId: string, formData: FormData) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  const amount = num(formData.get("amount"))
+  if (amount <= 0) return { error: "Informe o valor cobrado." }
+  const { error } = await supabase.from("card_charges").insert({
+    project_id: projectId,
+    ad_account_id: String(formData.get("ad_account_id") ?? "") || null,
+    amount,
+    charged_at: String(formData.get("charged_at") ?? new Date().toISOString().slice(0, 10)),
+    notes: String(formData.get("notes") ?? "") || null,
+    created_by: profile?.id ?? null,
+  })
+  if (error) return { error: error.message }
+  await logActivity({
+    actor: profile,
+    action: "create",
+    entity: "card_charge",
+    projectId,
+    summary: `Lançou cobrança no cartão de ${amount.toFixed(2)}`,
+  })
+  revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/")
+  return { ok: true }
+}
+
+export async function deleteCardCharge(projectId: string, id: string) {
+  const supabase = await createClient()
+  await supabase.from("card_charges").delete().eq("id", id)
   revalidatePath(`/projetos/${projectId}`)
   return { ok: true }
 }
@@ -300,6 +428,8 @@ export async function saveGateway(formData: FormData) {
     name,
     fee_pct: num(formData.get("fee_pct")),
     fee_fixed: num(formData.get("fee_fixed")),
+    term_days_pix: int(formData.get("term_days_pix")),
+    term_days_card: int(formData.get("term_days_card")),
   }
   const { error } = id
     ? await supabase.from("payment_gateways").update(payload).eq("id", id)
@@ -307,14 +437,14 @@ export async function saveGateway(formData: FormData) {
   if (error) {
     return { error: error.code === "23505" ? "Já existe um gateway com esse nome." : error.message }
   }
-  revalidatePath("/config")
+  revalidatePath("/config/gateways")
   return { ok: true }
 }
 
 export async function deleteGateway(id: string) {
   const supabase = await createClient()
   await supabase.from("payment_gateways").delete().eq("id", id)
-  revalidatePath("/config")
+  revalidatePath("/config/gateways")
   return { ok: true }
 }
 
@@ -330,20 +460,24 @@ export async function createSale(projectId: string, formData: FormData) {
   const applyFee = checkbox(formData, "apply_gateway_fee")
   const gatewayId = String(formData.get("gateway_id") ?? "") || null
   const productId = String(formData.get("product_id") ?? "") || null
+  const creativeId = String(formData.get("creative_id") ?? "") || null
   const paymentMethod = String(formData.get("payment_method") ?? "pix")
-  const source = String(formData.get("source") ?? "") || null
+  const source = String(formData.get("source") ?? "").toLowerCase() || null
+  const soldAt = String(formData.get("sold_at") ?? new Date().toISOString().slice(0, 10))
 
-  // taxa do gateway
+  // taxa + prazos do gateway
   let feePct = 0
   let feeFixed = 0
+  let gwTerms: { term_days_pix: number; term_days_card: number } | null = null
   if (gatewayId) {
     const { data: gw } = await supabase
       .from("payment_gateways")
-      .select("fee_pct, fee_fixed")
+      .select("fee_pct, fee_fixed, term_days_pix, term_days_card")
       .eq("id", gatewayId)
       .maybeSingle()
     feePct = gw?.fee_pct ?? 0
     feeFixed = gw?.fee_fixed ?? 0
+    gwTerms = gw ? { term_days_pix: gw.term_days_pix, term_days_card: gw.term_days_card } : null
   }
   // imposto do projeto
   const { data: proj } = await supabase
@@ -354,12 +488,14 @@ export async function createSale(projectId: string, formData: FormData) {
   const taxPct = proj?.tax_pct ?? 0
 
   const { fee, tax, net } = computeSaleNet({ gross, applyFee, feePct, feeFixed, taxPct })
+  const { date: receivableDate, hasTerm } = receivableDateFor(soldAt, paymentMethod, gwTerms)
 
   const { data: sale, error } = await supabase
     .from("sales")
     .insert({
       project_id: projectId,
       product_id: productId,
+      creative_id: creativeId,
       gateway_id: gatewayId,
       gross_amount: gross,
       apply_gateway_fee: applyFee,
@@ -368,7 +504,10 @@ export async function createSale(projectId: string, formData: FormData) {
       net_amount: net,
       payment_method: paymentMethod,
       source,
-      sold_at: String(formData.get("sold_at") ?? new Date().toISOString().slice(0, 10)),
+      sold_at: soldAt,
+      has_term: hasTerm,
+      receivable_date: receivableDate,
+      received: !hasTerm,
       notes: String(formData.get("notes") ?? "") || null,
       created_by: profile.id,
     })
@@ -376,8 +515,8 @@ export async function createSale(projectId: string, formData: FormData) {
     .maybeSingle()
   if (error) return { error: error.message }
 
-  // Entrada automática no caixa (líquido da venda)
-  if (sale) {
+  // Entrada no caixa apenas quando o dinheiro já entrou (venda sem prazo/recebida)
+  if (sale && !hasTerm) {
     await supabase.from("cash_entries").insert({
       owner_id: profile.id,
       project_id: projectId,
@@ -385,7 +524,7 @@ export async function createSale(projectId: string, formData: FormData) {
       amount: net,
       category: "venda",
       description: source ? `Venda (${source})` : "Venda",
-      occurred_at: String(formData.get("sold_at") ?? new Date().toISOString().slice(0, 10)),
+      occurred_at: soldAt,
       sale_id: sale.id,
       created_by: profile.id,
     })
@@ -396,18 +535,72 @@ export async function createSale(projectId: string, formData: FormData) {
     source: source ?? undefined,
     gateway_id: gatewayId ?? undefined,
   })
+  await logActivity({
+    actor: profile,
+    action: "create",
+    entity: "sale",
+    entityId: sale?.id ?? null,
+    projectId,
+    summary: `Registrou venda de ${gross.toFixed(2)}${hasTerm ? ` (recebe em ${receivableDate})` : ""}`,
+    meta: { gross, net, method: paymentMethod },
+  })
   revalidatePath(`/projetos/${projectId}`)
   revalidatePath("/")
   revalidatePath("/caixa")
+  revalidatePath("/recebiveis")
+  return { ok: true }
+}
+
+/** Marca uma venda com prazo como recebida e lança a entrada no caixa. */
+export async function markSaleReceived(projectId: string, id: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  const { data: sale } = await supabase.from("sales").select("*").eq("id", id).maybeSingle()
+  if (!sale) return { error: "Venda não encontrada." }
+  if (sale.received) return { ok: true }
+
+  await supabase.from("sales").update({ received: true }).eq("id", id)
+  await supabase.from("cash_entries").insert({
+    owner_id: sale.created_by ?? profile?.id ?? null,
+    project_id: projectId,
+    direction: "entrada",
+    amount: sale.net_amount,
+    category: "venda",
+    description: "Recebimento de venda",
+    occurred_at: new Date().toISOString().slice(0, 10),
+    sale_id: sale.id,
+    created_by: profile?.id ?? null,
+  })
+  await logActivity({
+    actor: profile,
+    action: "update",
+    entity: "sale",
+    entityId: id,
+    projectId,
+    summary: `Confirmou recebimento de ${Number(sale.net_amount).toFixed(2)}`,
+  })
+  revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/caixa")
+  revalidatePath("/recebiveis")
   return { ok: true }
 }
 
 export async function deleteSale(projectId: string, id: string) {
   const supabase = await createClient()
+  const profile = await getCurrentProfile()
   await supabase.from("cash_entries").delete().eq("sale_id", id)
   await supabase.from("sales").delete().eq("id", id)
+  await logActivity({
+    actor: profile,
+    action: "delete",
+    entity: "sale",
+    entityId: id,
+    projectId,
+    summary: "Excluiu uma venda",
+  })
   revalidatePath(`/projetos/${projectId}`)
   revalidatePath("/caixa")
+  revalidatePath("/recebiveis")
   return { ok: true }
 }
 
@@ -418,10 +611,12 @@ export async function createCashEntry(formData: FormData) {
   if (!profile) return { error: "Não autenticado." }
   const amount = num(formData.get("amount"))
   if (amount <= 0) return { error: "Informe um valor." }
+  const direction = String(formData.get("direction") ?? "entrada")
+  const projectId = String(formData.get("project_id") ?? "") || null
   const { error } = await supabase.from("cash_entries").insert({
     owner_id: profile.id,
-    project_id: String(formData.get("project_id") ?? "") || null,
-    direction: String(formData.get("direction") ?? "entrada"),
+    project_id: projectId,
+    direction,
     amount,
     category: String(formData.get("category") ?? "") || null,
     description: String(formData.get("description") ?? "") || null,
@@ -429,6 +624,13 @@ export async function createCashEntry(formData: FormData) {
     created_by: profile.id,
   })
   if (error) return { error: error.message }
+  await logActivity({
+    actor: profile,
+    action: "create",
+    entity: "cash_entry",
+    projectId,
+    summary: `${direction === "saida" ? "Retirada" : "Entrada"} no caixa de ${amount.toFixed(2)}`,
+  })
   revalidatePath("/caixa")
   return { ok: true }
 }

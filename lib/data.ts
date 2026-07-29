@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import type {
+  AdAccount,
+  CardCharge,
   CashEntry,
   Creative,
   DailyMetric,
@@ -20,6 +22,14 @@ export function periodStartDate(period: Period): string | null {
   const d = new Date()
   d.setDate(d.getDate() - days)
   return d.toISOString().slice(0, 10)
+}
+
+/** Intervalo de datas explícito (from/to em YYYY-MM-DD). Sobrepõe o period quando presente. */
+export type DateRange = { from: string | null; to: string | null }
+
+export function resolveRange(period: Period, range?: Partial<DateRange>): DateRange {
+  if (range?.from || range?.to) return { from: range.from ?? null, to: range.to ?? null }
+  return { from: periodStartDate(period), to: null }
 }
 
 export async function getCurrentProfile(): Promise<Profile | null> {
@@ -49,7 +59,9 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 }
 
 /** Mescla e salva preferências do usuário (última escolha vira padrão). */
-export async function savePrefs(patch: Record<string, string | undefined>) {
+export async function savePrefs(
+  patch: Record<string, string | string[] | boolean | undefined>,
+) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -99,11 +111,16 @@ export async function getProject(id: string): Promise<Project | null> {
   return data as Project | null
 }
 
-export async function getExpenses(projectIds: string[], start: string | null): Promise<Expense[]> {
+export async function getExpenses(
+  projectIds: string[],
+  start: string | null,
+  end: string | null = null,
+): Promise<Expense[]> {
   if (projectIds.length === 0) return []
   const supabase = await createClient()
   let q = supabase.from("expenses").select("*").in("project_id", projectIds)
   if (start) q = q.gte("spent_at", start)
+  if (end) q = q.lte("spent_at", end)
   const { data } = await q.order("spent_at", { ascending: false })
   return (data ?? []) as Expense[]
 }
@@ -111,11 +128,13 @@ export async function getExpenses(projectIds: string[], start: string | null): P
 export async function getDailyMetrics(
   projectIds: string[],
   start: string | null,
+  end: string | null = null,
 ): Promise<DailyMetric[]> {
   if (projectIds.length === 0) return []
   const supabase = await createClient()
   let q = supabase.from("daily_metrics").select("*").in("project_id", projectIds)
   if (start) q = q.gte("date", start)
+  if (end) q = q.lte("date", end)
   const { data } = await q.order("date")
   return (data ?? []) as DailyMetric[]
 }
@@ -196,13 +215,57 @@ export async function getProducts(projectId: string): Promise<Product[]> {
 }
 
 /* ---------- Vendas ---------- */
-export async function getSales(projectIds: string[], start: string | null): Promise<Sale[]> {
+export async function getSales(
+  projectIds: string[],
+  start: string | null,
+  end: string | null = null,
+): Promise<Sale[]> {
   if (projectIds.length === 0) return []
   const supabase = await createClient()
   let q = supabase.from("sales").select("*").in("project_id", projectIds)
   if (start) q = q.gte("sold_at", start)
+  if (end) q = q.lte("sold_at", end)
   const { data } = await q.order("sold_at", { ascending: false })
   return (data ?? []) as Sale[]
+}
+
+/** Vendas com prazo em aberto (para projeção de recebíveis), sem filtro de período. */
+export async function getReceivables(projectIds: string[]): Promise<Sale[]> {
+  if (projectIds.length === 0) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("sales")
+    .select("*")
+    .in("project_id", projectIds)
+    .eq("received", false)
+    .order("receivable_date")
+  return (data ?? []) as Sale[]
+}
+
+/* ---------- Contas de anúncio ---------- */
+export async function getAdAccounts(projectId: string): Promise<AdAccount[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("ad_accounts")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at")
+  return (data ?? []) as AdAccount[]
+}
+
+/* ---------- Cobranças no cartão (anúncios com imposto) ---------- */
+export async function getCardCharges(
+  projectIds: string[],
+  start: string | null,
+  end: string | null = null,
+): Promise<CardCharge[]> {
+  if (projectIds.length === 0) return []
+  const supabase = await createClient()
+  let q = supabase.from("card_charges").select("*").in("project_id", projectIds)
+  if (start) q = q.gte("charged_at", start)
+  if (end) q = q.lte("charged_at", end)
+  const { data } = await q.order("charged_at", { ascending: false })
+  return (data ?? []) as CardCharge[]
 }
 
 /* ---------- Caixa ---------- */
