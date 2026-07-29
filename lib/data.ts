@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import type {
   AdAccount,
+  BankAccount,
   CardCharge,
   CashEntry,
   Creative,
@@ -60,7 +61,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 
 /** Mescla e salva preferências do usuário (última escolha vira padrão). */
 export async function savePrefs(
-  patch: Record<string, string | string[] | boolean | undefined>,
+  patch: Record<string, string | string[] | number | boolean | undefined>,
 ) {
   const supabase = await createClient()
   const {
@@ -288,4 +289,16 @@ export async function getCashEntries(profile: Profile | null): Promise<CashEntry
     .select("*")
     .order("occurred_at", { ascending: false })
   return (data ?? []) as CashEntry[]
+}
+
+/** Contas bancárias/carteiras do usuário (gestor financeiro pessoal). */
+export async function getBankAccounts(profile: Profile | null): Promise<BankAccount[]> {
+  if (!profile) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("bank_accounts")
+    .select("*")
+    .eq("owner_id", profile.id)
+    .order("created_at")
+  return (data ?? []) as BankAccount[]
 }

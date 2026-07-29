@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, createAdminClient } from "@/lib/supabase/server"
 import { getCurrentProfile, savePrefs } from "@/lib/data"
 import { computeSaleNet, receivableDateFor } from "@/lib/finance"
 import { normalizeCurrency } from "@/lib/currency"
@@ -32,6 +32,19 @@ export async function saveListPref(
 
 export async function setSidebarCollapsed(collapsed: boolean) {
   await savePrefs({ sidebar_collapsed: collapsed })
+  return { ok: true }
+}
+
+/** Preferências de exibição das dashboards (gasto, base do lucro, % imposto, widgets). */
+export async function saveViewPrefs(patch: {
+  spend_view?: string
+  profit_base?: string
+  meta_tax_pct?: number
+  dash_widgets?: string[]
+  project_widgets?: string[]
+}) {
+  await savePrefs(patch)
+  revalidatePath("/")
   return { ok: true }
 }
 
@@ -733,7 +746,10 @@ export async function transferCash(formData: FormData) {
     created_by: profile.id,
   }
 
-  const { error } = await supabase.from("cash_entries").insert([outRow, inRow])
+  // Admin client: a perna de entrada pode pertencer a outro sócio (owner_id != auth.uid()),
+  // o que a RLS de cash_entries bloquearia. O ator já foi validado acima.
+  const admin = createAdminClient()
+  const { error } = await admin.from("cash_entries").insert([outRow, inRow])
   if (error) return { error: error.message }
 
   // Ajusta saldo da conta bancária: sai se origem pessoal, entra se destino pessoal.

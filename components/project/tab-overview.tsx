@@ -1,18 +1,29 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { CardCharge, DailyMetric, Expense, Project, Sale } from "@/lib/types"
-import { aggregateTotals, timeSeries } from "@/lib/aggregate"
-import { diagnoseFunnel, computeTrafficTax } from "@/lib/finance"
-import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils"
+import type { CardCharge, CashEntry, DailyMetric, Expense, Project, Sale, SpendView, ProfitBase } from "@/lib/types"
+import { timeSeries } from "@/lib/aggregate"
+import { buildBreakdown } from "@/lib/money"
+import { buildWidget, resolveWidgets, DEFAULT_PROJECT_WIDGETS } from "@/lib/dashboard-widgets"
+import { diagnoseFunnel } from "@/lib/finance"
+import { formatPercent } from "@/lib/utils"
 import { KpiCard } from "@/components/kpi-card"
 import { SpendRevenueChart } from "@/components/spend-revenue-chart"
-import { Card, CardContent, CardHeader, CardTitle, Button, Field, Input } from "@/components/ui"
+import { HistoryPopover } from "@/components/history-popover"
+import { Card, CardContent, CardHeader, CardTitle, Button, Field, Input, Select } from "@/components/ui"
 import { SemaphoreDot } from "@/components/semaphore"
 import { upsertDailyMetric } from "@/app/actions/projects"
-import { Wallet, TrendingUp, PiggyBank, Target, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import { Modal } from "@/components/modal"
+
+const SPEND_VIEWS: { value: SpendView; label: string }[] = [
+  { value: "ads", label: "Anúncios" },
+  { value: "card", label: "Cartão" },
+  { value: "combined", label: "Total c/ imposto" },
+  { value: "ads_tax", label: "Anúncios + imposto" },
+  { value: "card_tax", label: "Cartão + imposto" },
+]
 
 export function TabOverview({
   project,
@@ -20,26 +31,42 @@ export function TabOverview({
   expenses,
   sales,
   cardCharges = [],
+  cashEntries = [],
   usdBrl,
+  spendView: initialView = "ads",
+  profitBase: initialBase = "ads",
+  metaTaxPct = 0,
+  widgets,
 }: {
   project: Project
   metrics: DailyMetric[]
   expenses: Expense[]
   sales: Sale[]
   cardCharges?: CardCharge[]
+  cashEntries?: CashEntry[]
   usdBrl: number
+  spendView?: SpendView
+  profitBase?: ProfitBase
+  metaTaxPct?: number
+  widgets?: string[]
 }) {
-  const netSales = sales.reduce((s, v) => s + v.net_amount, 0)
-  const adSpend = metrics.reduce((s, m) => s + m.spend, 0)
-  const cardCharged = cardCharges.reduce((s, c) => s + c.amount, 0)
-  const trafficTax = computeTrafficTax(adSpend, cardCharged)
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string>()
+  const [view, setView] = useState<SpendView>(initialView)
+  const [base, setBase] = useState<ProfitBase>(initialBase)
   const router = useRouter()
 
-  const totals = aggregateTotals(metrics, expenses, [project], usdBrl, { sales })
+  const breakdown = useMemo(
+    () =>
+      buildBreakdown({ projects: [project], metrics, expenses, sales, cardCharges, cashEntries }, usdBrl, {
+        metaTaxPct,
+      }),
+    [project, metrics, expenses, sales, cardCharges, cashEntries, usdBrl, metaTaxPct],
+  )
   const series = timeSeries(metrics, [project], usdBrl)
+  const historyPoints = series.map((s) => ({ date: s.date, liquido: s.revenue - s.spend, faturado: s.revenue }))
+  const widgetKeys = resolveWidgets(widgets, DEFAULT_PROJECT_WIDGETS)
 
   const funnelTot = metrics.reduce(
     (a, m) => ({
