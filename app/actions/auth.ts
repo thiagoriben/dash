@@ -53,12 +53,17 @@ export async function signUp(
     .toLowerCase()
   const password = String(formData.get("password") ?? "")
   const confirm = String(formData.get("confirm") ?? "")
+  const recoveryEmail = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase()
 
   if (!username || !password) return { error: "Preencha usuário e senha." }
   if (!/^[a-z0-9._-]{3,}$/.test(username))
     return { error: "Usuário inválido (mín. 3 caracteres, sem espaços)." }
   if (password.length < 6) return { error: "A senha precisa de ao menos 6 caracteres." }
   if (password !== confirm) return { error: "As senhas não conferem." }
+  if (recoveryEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recoveryEmail))
+    return { error: "Email de recuperação inválido." }
 
   // Cria o usuário já com email confirmado, porém pendente de aprovação.
   // Não cria sessão: só entra após um admin aprovar.
@@ -90,6 +95,7 @@ export async function signUp(
         username,
         role: isFirst ? "admin" : "member",
         approved: isFirst,
+        prefs: recoveryEmail ? { recovery_email: recoveryEmail } : {},
       },
       { onConflict: "id" },
     )
@@ -102,4 +108,73 @@ export async function signOut() {
   const supabase = await createClient()
   await supabase.auth.signOut()
   redirect("/login")
+}
+
+/**
+ * "Esqueci a senha": sem SMTP, validamos o email de recuperação salvo no
+ * perfil. Se o usuário informar username + email que batem, redefinimos a senha.
+ */
+export async function resetPasswordByEmail(
+  _prev: { error?: string; ok?: boolean } | undefined,
+  formData: FormData,
+): Promise<{ error?: string; ok?: boolean }> {
+  const username = String(formData.get("username") ?? "").trim().toLowerCase()
+  const email = String(formData.get("email") ?? "").trim().toLowerCase()
+  const password = String(formData.get("password") ?? "")
+  const confirm = String(formData.get("confirm") ?? "")
+
+  if (!username || !email || !password) return { error: "Preencha todos os campos." }
+  if (password.length < 6) return { error: "A senha precisa de ao menos 6 caracteres." }
+  if (password !== confirm) return { error: "As senhas não conferem." }
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id, prefs")
+    .eq("username", username)
+    .maybeSingle()
+
+  const savedEmail = String((profile?.prefs as Record<string, unknown> | null)?.recovery_email ?? "")
+    .trim()
+    .toLowerCase()
+
+  if (!profile || !savedEmail) {
+    return { error: "Esta conta não tem email de recuperação cadastrado." }
+  }
+  if (savedEmail !== email) {
+    return { error: "Email não confere com o cadastrado nesta conta." }
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(profile.id, { password })
+  if (error) return { error: "Não foi possível redefinir a senha." }
+  return { ok: true }
+}
+
+/** Troca de senha do usuário logado (valida a senha atual). */
+export async function changePassword(
+  _prev: { error?: string; ok?: boolean } | undefined,
+  formData: FormData,
+): Promise<{ error?: string; ok?: boolean }> {
+  const current = String(formData.get("current") ?? "")
+  const password = String(formData.get("password") ?? "")
+  const confirm = String(formData.get("confirm") ?? "")
+
+  if (!current || !password) return { error: "Preencha todos os campos." }
+  if (password.length < 6) return { error: "A nova senha precisa de ao menos 6 caracteres." }
+  if (password !== confirm) return { error: "As senhas não conferem." }
+
+  const supabase = await createClient()
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user?.email) return { error: "Sessão expirada." }
+
+  // Revalida a senha atual antes de trocar.
+  const check = await supabase.auth.signInWithPassword({
+    email: userData.user.email,
+    password: current,
+  })
+  if (check.error) return { error: "Senha atual incorreta." }
+
+  const { error } = await supabase.auth.updateUser({ password })
+  if (error) return { error: "Não foi possível trocar a senha." }
+  return { ok: true }
 }

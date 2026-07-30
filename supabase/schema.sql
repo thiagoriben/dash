@@ -20,9 +20,12 @@ create table if not exists public.profiles (
   phone text,
   role text not null default 'member',   -- 'admin' | 'member'
   approved boolean not null default false, -- admin precisa aprovar novos cadastros
-  prefs jsonb not null default '{}'::jsonb,
+  is_public boolean not null default false, -- perfil visível para outros usuários
+  prefs jsonb not null default '{}'::jsonb, -- cores/preferências (accent_color, badge_colors, etc.)
   created_at timestamptz not null default now()
 );
+-- garante a coluna em bancos já existentes
+alter table public.profiles add column if not exists is_public boolean not null default false;
 
 -- PROJETOS
 create table if not exists public.projects (
@@ -515,5 +518,146 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'chat_messages'
   ) then
     alter publication supabase_realtime add table public.chat_messages;
+  end if;
+end $$;
+
+-- =========================================================
+-- PRODUTIVIDADE: métricas custom, atalhos, notas, to-do, DM
+-- =========================================================
+
+-- MÉTRICAS CUSTOMIZADAS (dashboard pessoal quando project_id null; senão do projeto)
+create table if not exists public.custom_metrics (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete cascade,
+  name text not null,
+  kind text not null default 'quantidade',   -- 'quantidade' | 'valor' | 'percentual'
+  value numeric not null default 0,
+  icon text,
+  position int not null default 0,
+  hidden boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+-- CATEGORIAS DE ATALHOS/NOTAS (global do usuário quando project_id null)
+create table if not exists public.shortcut_categories (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete cascade,
+  name text not null,
+  color text,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- ATALHOS (links, ids, imagens, vídeos, textos salvos)
+create table if not exists public.shortcuts (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete cascade,
+  category_id uuid references public.shortcut_categories(id) on delete set null,
+  title text not null,
+  url text,
+  body text,
+  kind text not null default 'link',        -- 'link' | 'imagem' | 'video' | 'nota' | 'id'
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- BLOCO DE NOTAS
+create table if not exists public.notes (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete cascade,
+  category_id uuid references public.shortcut_categories(id) on delete set null,
+  title text not null,
+  body text,
+  visibility text not null default 'privado', -- 'privado' | 'compartilhado'
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- TO-DO (pessoal quando project_id null; assignee só faz sentido em projeto)
+create table if not exists public.todo_items (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete cascade,
+  assignee_id uuid references public.profiles(id) on delete set null,
+  category text,
+  title text not null,
+  done boolean not null default false,
+  due_kind text not null default 'sem_prazo', -- 'hoje' | 'amanha' | 'sem_prazo'
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- MENSAGENS DIRETAS (chat usuário a usuário)
+create table if not exists public.direct_messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid not null references public.profiles(id) on delete cascade,
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_custom_metrics_owner on public.custom_metrics(owner_id);
+create index if not exists idx_custom_metrics_project on public.custom_metrics(project_id);
+create index if not exists idx_shortcut_categories_owner on public.shortcut_categories(owner_id);
+create index if not exists idx_shortcuts_owner on public.shortcuts(owner_id);
+create index if not exists idx_shortcuts_project on public.shortcuts(project_id);
+create index if not exists idx_notes_owner on public.notes(owner_id);
+create index if not exists idx_todo_owner on public.todo_items(owner_id);
+create index if not exists idx_todo_project on public.todo_items(project_id);
+create index if not exists idx_dm_sender on public.direct_messages(sender_id);
+create index if not exists idx_dm_recipient on public.direct_messages(recipient_id);
+
+alter table public.custom_metrics     enable row level security;
+alter table public.shortcut_categories enable row level security;
+alter table public.shortcuts          enable row level security;
+alter table public.notes              enable row level security;
+alter table public.todo_items         enable row level security;
+alter table public.direct_messages    enable row level security;
+
+-- Predicado comum: dono OU (é de projeto E tenho acesso) OU admin
+-- custom_metrics
+create policy custom_metrics_all on public.custom_metrics for all to authenticated
+  using (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()))
+  with check (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()));
+-- shortcut_categories
+create policy shortcut_categories_all on public.shortcut_categories for all to authenticated
+  using (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()))
+  with check (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()));
+-- shortcuts
+create policy shortcuts_all on public.shortcuts for all to authenticated
+  using (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()))
+  with check (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()));
+-- notes
+create policy notes_all on public.notes for all to authenticated
+  using (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()))
+  with check (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()));
+-- todo_items (dono, responsável, acesso ao projeto)
+create policy todo_items_all on public.todo_items for all to authenticated
+  using (owner_id = auth.uid() or assignee_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()))
+  with check (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()));
+-- direct_messages (remetente ou destinatário)
+create policy dm_select on public.direct_messages for select
+  to authenticated using (sender_id = auth.uid() or recipient_id = auth.uid() or public.is_admin(auth.uid()));
+create policy dm_insert on public.direct_messages for insert
+  to authenticated with check (sender_id = auth.uid());
+create policy dm_update on public.direct_messages for update
+  to authenticated using (recipient_id = auth.uid() or sender_id = auth.uid())
+  with check (recipient_id = auth.uid() or sender_id = auth.uid());
+create policy dm_delete on public.direct_messages for delete
+  to authenticated using (sender_id = auth.uid() or public.is_admin(auth.uid()));
+
+-- REALTIME: direct_messages
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'direct_messages'
+  ) then
+    alter publication supabase_realtime add table public.direct_messages;
   end if;
 end $$;

@@ -8,6 +8,7 @@ export type Profile = {
   phone: string | null
   role: "admin" | "member"
   approved: boolean
+  is_public: boolean
   prefs: Prefs | null
   created_at: string
 }
@@ -48,6 +49,10 @@ export type Prefs = {
   dash_widgets?: string[]
   /** Configuração dos widgets/KPIs da dashboard de projeto. */
   project_widgets?: string[]
+  /** Email opcional para recuperação de senha. */
+  recovery_email?: string
+  /** Cor de destaque do app (hex). Aplicada globalmente. */
+  accent_color?: string
 }
 
 /** Como o gasto aparece na dashboard. */

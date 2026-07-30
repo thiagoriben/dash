@@ -16,7 +16,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const collapsed = profile?.prefs?.sidebar_collapsed ?? false
   const pending = profile?.role === "admin" ? await getPendingProfiles() : []
 
+  // Cor de destaque personalizada: injeta como override de --brand.
+  const accent = profile?.prefs?.accent_color
+  const accentStyle =
+    accent && /^#[0-9a-fA-F]{6}$/.test(accent)
+      ? `:root{--brand:${accent};--brand-fg:${accentForeground(accent)};}`
+      : null
+
   return (
+    <>
+      {accentStyle ? <style dangerouslySetInnerHTML={{ __html: accentStyle }} /> : null}
     <AppShell
       initialCollapsed={collapsed}
       sidebar={<Sidebar profile={profile} pending={pending} />}
@@ -29,5 +38,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     >
       {children}
     </AppShell>
+    </>
   )
+}
+
+/** Escolhe texto claro/escuro conforme a luminância da cor de destaque. */
+function accentForeground(hex: string): string {
+  const r = Number.parseInt(hex.slice(1, 3), 16)
+  const g = Number.parseInt(hex.slice(3, 5), 16)
+  const b = Number.parseInt(hex.slice(5, 7), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance > 0.6 ? "#04140b" : "#ffffff"
 }
