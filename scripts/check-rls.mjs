@@ -1,0 +1,12 @@
+import pg from "pg"
+const c = new pg.Client({ connectionString: process.env.POSTGRES_URL_NON_POOLING })
+await c.connect()
+const pol = await c.query(`select policyname, cmd, with_check, qual from pg_policies where tablename='chat_messages'`)
+console.log("=== chat_messages policies ===")
+for (const r of pol.rows) console.log(r.policyname, "|", r.cmd, "| CHECK:", r.with_check, "| USING:", r.qual)
+const fn = await c.query(`select proname, prosrc from pg_proc where proname in ('has_project_access','is_project_owner')`)
+console.log("=== funcs ===")
+for (const r of fn.rows) console.log(r.proname, "::", r.prosrc.replace(/\s+/g, " ").slice(0, 500))
+const mem = await c.query(`select column_name from information_schema.columns where table_name='project_members'`)
+console.log("=== project_members cols ===", mem.rows.map((r) => r.column_name).join(", "))
+await c.end()
