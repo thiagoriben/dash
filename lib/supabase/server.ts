@@ -28,12 +28,16 @@ export async function createClient() {
   )
 }
 
-/** Admin client using the service role key. SERVER ONLY. */
+/** Admin client using the service role / secret key. SERVER ONLY. */
 export function createAdminClient() {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    "https://toiqncezuamuaqobsyun.supabase.co"
+  const secretKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.sescretkey!
+
+  return createServerClient(url, secretKey, {
       cookies: { getAll() { return [] }, setAll() {} },
       auth: { autoRefreshToken: false, persistSession: false },
     },

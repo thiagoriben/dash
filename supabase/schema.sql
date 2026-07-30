@@ -272,15 +272,22 @@ grant execute on function public.is_project_owner(uuid, uuid) to authenticated;
 -- ---------- TRIGGER: cria profile no signup ----------
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  is_first boolean;
 begin
+  -- O primeiro usuário do sistema vira admin aprovado automaticamente.
+  select not exists (select 1 from public.profiles) into is_first;
+
   insert into public.profiles (id, username, full_name, phone, role, approved)
   values (
     new.id,
     coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1)),
     coalesce(new.raw_user_meta_data ->> 'full_name', null),
     coalesce(new.raw_user_meta_data ->> 'phone', null),
-    coalesce(new.raw_user_meta_data ->> 'role', 'member'),
-    coalesce((new.raw_user_meta_data ->> 'approved')::boolean, false)
+    case when is_first then 'admin'
+         else coalesce(new.raw_user_meta_data ->> 'role', 'member') end,
+    case when is_first then true
+         else coalesce((new.raw_user_meta_data ->> 'approved')::boolean, false) end
   )
   on conflict (id) do nothing;
   return new;
@@ -311,7 +318,18 @@ alter table public.profit_splits     enable row level security;
 alter table public.cash_entries      enable row level security;
 alter table public.activity_log      enable row level security;
 
--- ---------- POLICIES: PROFILES ----------
+-- ---------- POLICIES ----------
+-- Remove todas as policies existentes no schema public para permitir
+-- rodar este arquivo novamente sem erro de "policy already exists".
+do $$
+declare r record;
+begin
+  for r in (select policyname, tablename from pg_policies where schemaname = 'public') loop
+    execute format('drop policy if exists %I on public.%I', r.policyname, r.tablename);
+  end loop;
+end $$;
+
+-- PROFILES
 create policy profiles_select on public.profiles for select
   to authenticated using (true);
 create policy profiles_update_own on public.profiles for update
