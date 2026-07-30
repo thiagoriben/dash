@@ -31,12 +31,12 @@ export function Sparkline({
     <svg width={width} height={height} className="overflow-visible" aria-hidden>
       <defs>
         <linearGradient id={`spark-line-${id}`} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#2de2e6" />
-          <stop offset="100%" stopColor="#8b5cf6" />
+          <stop offset="0%" stopColor="#29f57e" />
+          <stop offset="100%" stopColor="#22c55e" />
         </linearGradient>
         <linearGradient id={`spark-fill-${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(45,226,230,0.25)" />
-          <stop offset="100%" stopColor="rgba(45,226,230,0)" />
+          <stop offset="0%" stopColor="rgba(41,245,126,0.25)" />
+          <stop offset="100%" stopColor="rgba(41,245,126,0)" />
         </linearGradient>
       </defs>
       <path d={area} fill={`url(#spark-fill-${id})`} />
@@ -47,7 +47,7 @@ export function Sparkline({
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{ filter: "drop-shadow(0 0 4px rgba(45,226,230,0.5))" }}
+        style={{ filter: "drop-shadow(0 0 4px rgba(41,245,126,0.5))" }}
       />
     </svg>
   )

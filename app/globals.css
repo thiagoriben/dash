@@ -1,27 +1,28 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: #070b14;
-  --color-foreground: #e8ecf4;
-  --color-muted: #8a93a8;
-  --color-surface: #0f1524;
-  --color-surface-2: #131a2c;
-  --color-border: rgba(255, 255, 255, 0.06);
-  --color-border-strong: rgba(255, 255, 255, 0.12);
+  --color-background: #0d0f11;
+  --color-foreground: #f1f3f5;
+  --color-muted: #9098a3;
+  --color-surface: #16191d;
+  --color-surface-2: #1d2126;
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
 
-  --color-primary: #2de2e6;
-  --color-secondary: #8b5cf6;
-  --color-positive: #34e4a0;
-  --color-negative: #ff5c7c;
-  --color-warning: #ffb454;
+  --color-primary: #29f57e;
+  --color-secondary: #6b7280;
+  --color-positive: #29f57e;
+  --color-negative: #ff4d4d;
+  --color-warning: #ff9838;
+  --color-yellow: #ffd23f;
 
   /* aliases usados na UI */
-  --color-success: #34e4a0;
-  --color-danger: #ff5c7c;
-  --color-accent: #2de2e6;
-  --color-accent-fg: #04121a;
-  --accent: #2de2e6;
-  --accent-fg: #04121a;
+  --color-success: #29f57e;
+  --color-danger: #ff4d4d;
+  --color-accent: #29f57e;
+  --color-accent-fg: #04140b;
+  --accent: #29f57e;
+  --accent-fg: #04140b;
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-space), ui-sans-serif, system-ui, sans-serif;
@@ -35,43 +36,31 @@
 }
 
 html {
-  background-color: #070b14;
+  background-color: #0d0f11;
   color-scheme: dark;
 }
 
 body {
-  background-color: #070b14;
+  background-color: #0d0f11;
   color: var(--color-foreground);
   font-family: var(--font-sans);
   min-height: 100dvh;
   position: relative;
 }
 
-/* Aurora glow background */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(60rem 40rem at 10% -10%, rgba(45, 226, 230, 0.1), transparent 60%),
-    radial-gradient(50rem 40rem at 100% 0%, rgba(139, 92, 246, 0.12), transparent 55%),
-    radial-gradient(50rem 50rem at 80% 110%, rgba(45, 226, 230, 0.06), transparent 60%);
-}
-
+/* Fundo sóbrio: leve grade de grafite, sem glow colorido */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.35;
+  opacity: 0.4;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(circle at 50% 30%, black, transparent 90%);
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at 50% 20%, black, transparent 85%);
 }
 
 #app-root {
@@ -92,10 +81,10 @@ body::after {
 }
 
 .glass {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 40%),
-    #0f1524;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0) 40%),
+    #16191d;
   border: 1px solid var(--color-border);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
 }
 
 .glass-hover {
@@ -103,14 +92,12 @@ body::after {
 }
 .glass-hover:hover {
   border-color: var(--color-border-strong);
-  box-shadow: 0 0 0 1px rgba(45, 226, 230, 0.08), 0 8px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 1px rgba(41, 245, 126, 0.1), 0 8px 40px rgba(0, 0, 0, 0.4);
 }
 
 .neon-text {
-  background: linear-gradient(90deg, #2de2e6, #8b5cf6);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--color-primary);
+  text-shadow: 0 0 18px rgba(41, 245, 126, 0.35);
 }
 
 @media (prefers-reduced-motion: reduce) {

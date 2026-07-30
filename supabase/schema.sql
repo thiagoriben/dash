@@ -425,3 +425,94 @@ create policy activity_select on public.activity_log for select
   );
 create policy activity_insert on public.activity_log for insert
   to authenticated with check (actor_id = auth.uid() or public.is_admin(auth.uid()));
+
+-- =========================================================
+-- SOCIAL: amizades, pedidos de entrada em projeto, chat
+-- =========================================================
+
+-- AMIZADES (par ordenado requester/addressee, status pending/accepted)
+create table if not exists public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid not null references public.profiles(id) on delete cascade,
+  addressee_id uuid not null references public.profiles(id) on delete cascade,
+  status text not null default 'pending',   -- 'pending' | 'accepted'
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (requester_id, addressee_id),
+  check (requester_id <> addressee_id)
+);
+
+-- PEDIDOS DE ENTRADA EM PROJETO (usuário digita ID do projeto)
+create table if not exists public.project_join_requests (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  status text not null default 'pending',   -- 'pending' | 'accepted' | 'rejected'
+  message text,
+  created_at timestamptz not null default now(),
+  unique (project_id, user_id)
+);
+
+-- CHAT DO PROJETO
+create table if not exists public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  sender_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_friendships_requester on public.friendships(requester_id);
+create index if not exists idx_friendships_addressee on public.friendships(addressee_id);
+create index if not exists idx_join_requests_project on public.project_join_requests(project_id);
+create index if not exists idx_join_requests_user on public.project_join_requests(user_id);
+create index if not exists idx_chat_project on public.chat_messages(project_id);
+
+alter table public.friendships           enable row level security;
+alter table public.project_join_requests enable row level security;
+alter table public.chat_messages         enable row level security;
+
+-- FRIENDSHIPS: qualquer lado lê; requester cria; qualquer lado atualiza/deleta
+create policy friendships_select on public.friendships for select
+  to authenticated using (requester_id = auth.uid() or addressee_id = auth.uid() or public.is_admin(auth.uid()));
+create policy friendships_insert on public.friendships for insert
+  to authenticated with check (requester_id = auth.uid());
+create policy friendships_update on public.friendships for update
+  to authenticated using (requester_id = auth.uid() or addressee_id = auth.uid())
+  with check (requester_id = auth.uid() or addressee_id = auth.uid());
+create policy friendships_delete on public.friendships for delete
+  to authenticated using (requester_id = auth.uid() or addressee_id = auth.uid() or public.is_admin(auth.uid()));
+
+-- JOIN REQUESTS: o próprio user ou o dono do projeto leem; user cria; dono resolve
+create policy join_requests_select on public.project_join_requests for select
+  to authenticated using (
+    user_id = auth.uid() or public.is_project_owner(project_id, auth.uid()) or public.is_admin(auth.uid())
+  );
+create policy join_requests_insert on public.project_join_requests for insert
+  to authenticated with check (user_id = auth.uid());
+create policy join_requests_update on public.project_join_requests for update
+  to authenticated using (public.is_project_owner(project_id, auth.uid()) or public.is_admin(auth.uid()))
+  with check (public.is_project_owner(project_id, auth.uid()) or public.is_admin(auth.uid()));
+create policy join_requests_delete on public.project_join_requests for delete
+  to authenticated using (user_id = auth.uid() or public.is_project_owner(project_id, auth.uid()) or public.is_admin(auth.uid()));
+
+-- CHAT: quem tem acesso ao projeto lê e escreve as próprias mensagens
+create policy chat_select on public.chat_messages for select
+  to authenticated using (public.has_project_access(project_id, auth.uid()) or public.is_admin(auth.uid()));
+create policy chat_insert on public.chat_messages for insert
+  to authenticated with check (
+    sender_id = auth.uid() and public.has_project_access(project_id, auth.uid())
+  );
+create policy chat_delete on public.chat_messages for delete
+  to authenticated using (sender_id = auth.uid() or public.is_project_owner(project_id, auth.uid()) or public.is_admin(auth.uid()));
+
+-- REALTIME: publica chat_messages
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'chat_messages'
+  ) then
+    alter publication supabase_realtime add table public.chat_messages;
+  end if;
+end $$;

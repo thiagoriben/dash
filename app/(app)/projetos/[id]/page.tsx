@@ -15,11 +15,13 @@ import {
   getProfitSplits,
   getProfiles,
   getProjectMembers,
+  getBankAccounts,
   resolveRange,
   type Period,
 } from "@/lib/data"
 import { getActivity } from "@/lib/activity"
 import { getUsdBrlRate } from "@/lib/currency-server"
+import { DEFAULT_CURRENCIES } from "@/lib/currency"
 import { ProjectDetail } from "@/components/project/project-detail"
 
 export default async function ProjectPage({
@@ -56,6 +58,7 @@ export default async function ProjectPage({
     profiles,
     members,
     activity,
+    banks,
   ] = await Promise.all([
     getExpenses([id], from, to),
     getDailyMetrics([id], from, to),
@@ -71,7 +74,9 @@ export default async function ProjectPage({
     getProfiles(),
     getProjectMembers(id),
     getActivity({ projectId: id, limit: 60 }),
+    getBankAccounts(profile),
   ])
+  const currencies = profile.prefs?.currencies ?? DEFAULT_CURRENCIES
 
   const owner = profiles.find((p) => p.id === project.owner_id) ?? null
   const isOwner = project.owner_id === profile.id
@@ -99,6 +104,9 @@ export default async function ProjectPage({
       isAdmin={isAdmin}
       prefs={profile.prefs}
       usdBrl={usdBrl}
+      banks={banks}
+      currencies={currencies}
+      meId={profile.id}
     />
   )
 }

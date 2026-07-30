@@ -60,6 +60,7 @@ export function CaixaClient({
   meId,
   usdBrl,
   currencies,
+  lockedProjectId,
 }: {
   entries: CashEntry[]
   projects: Project[]
@@ -68,14 +69,26 @@ export function CaixaClient({
   meId: string
   usdBrl: number
   currencies: string[]
+  /** Quando definido, o caixa fica travado neste projeto (uso embutido na aba do projeto). */
+  lockedProjectId?: string
 }) {
-  const [scope, setScope] = useState<Scope>("pessoal")
-  const [projectId, setProjectId] = useState<string>(projects[0]?.id ?? "")
+  const locked = Boolean(lockedProjectId)
+  const [scopeState, setScope] = useState<Scope>(locked ? "projeto" : "pessoal")
+  const scope: Scope = locked ? "projeto" : scopeState
+  const [projectIdState, setProjectId] = useState<string>(projects[0]?.id ?? "")
+  const projectId = locked ? (lockedProjectId as string) : projectIdState
   const [period, setPeriod] = useState<PeriodKey>("30d")
   const [customFrom, setCustomFrom] = useState("")
   const [customTo, setCustomTo] = useState("")
   const [entryOpen, setEntryOpen] = useState(false)
   const [direction, setDirection] = useState<"entrada" | "saida">("entrada")
+  const [prefill, setPrefill] = useState<{
+    amount?: string
+    description?: string
+    category?: string
+    currency?: string
+  }>({})
+  const [formKey, setFormKey] = useState(0)
   const [transferOpen, setTransferOpen] = useState(false)
   const [bankOpen, setBankOpen] = useState(false)
   const [editingBank, setEditingBank] = useState<BankAccount | null>(null)
@@ -126,7 +139,44 @@ export function CaixaClient({
   function openNew(dir: "entrada" | "saida") {
     setDirection(dir)
     setError(undefined)
+    setPrefill({})
+    setFormKey((k) => k + 1)
     setEntryOpen(true)
+  }
+
+  // Lançamentos recentes do mesmo escopo/direção — clique preenche o formulário.
+  const recent = useMemo(() => {
+    const seen = new Set<string>()
+    const list: { description: string; amount: number; currency: string; category: string | null }[] = []
+    const pool = entries
+      .filter((c) =>
+        c.direction === direction &&
+        (scope === "pessoal" ? c.project_id === null && c.owner_id === meId : c.project_id === projectId),
+      )
+      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+    for (const c of pool) {
+      const key = `${c.description ?? ""}|${c.amount}|${c.category ?? ""}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      list.push({
+        description: c.description ?? "",
+        amount: c.amount,
+        currency: c.currency ?? "BRL",
+        category: c.category ?? null,
+      })
+      if (list.length >= 6) break
+    }
+    return list
+  }, [entries, direction, scope, projectId, meId])
+
+  function applyRecent(r: { description: string; amount: number; currency: string; category: string | null }) {
+    setPrefill({
+      amount: String(r.amount),
+      description: r.description,
+      category: r.category ?? "",
+      currency: r.currency,
+    })
+    setFormKey((k) => k + 1)
   }
   function openBank(b: BankAccount | null) {
     setEditingBank(b)
@@ -155,7 +205,7 @@ export function CaixaClient({
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold">Caixa</h1>
+          {!locked && <h1 className="font-display text-2xl font-semibold">Caixa</h1>}
           <p className="text-sm text-muted">
             {scope === "pessoal"
               ? "Seu caixa e contas pessoais. Privado, só você vê."
@@ -177,15 +227,17 @@ export function CaixaClient({
 
       {/* Seletor de escopo + filtros */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-xl border border-[color:var(--color-border)] p-1">
-          <ScopeTab active={scope === "pessoal"} onClick={() => setScope("pessoal")} icon={<Wallet size={15} />}>
-            Pessoal
-          </ScopeTab>
-          <ScopeTab active={scope === "projeto"} onClick={() => setScope("projeto")} icon={<Building2 size={15} />}>
-            Projeto
-          </ScopeTab>
-        </div>
-        {scope === "projeto" && (
+        {!locked && (
+          <div className="inline-flex rounded-xl border border-[color:var(--color-border)] p-1">
+            <ScopeTab active={scope === "pessoal"} onClick={() => setScope("pessoal")} icon={<Wallet size={15} />}>
+              Pessoal
+            </ScopeTab>
+            <ScopeTab active={scope === "projeto"} onClick={() => setScope("projeto")} icon={<Building2 size={15} />}>
+              Projeto
+            </ScopeTab>
+          </div>
+        )}
+        {!locked && scope === "projeto" && (
           <Select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="max-w-[220px]">
             {projects.length === 0 && <option value="">Nenhum projeto</option>}
             {projects.map((p) => (
@@ -358,15 +410,39 @@ export function CaixaClient({
         onClose={() => setEntryOpen(false)}
         title={direction === "entrada" ? "Nova entrada" : "Nova saída"}
       >
-        <form action={submit(createCashEntry, () => setEntryOpen(false))} className="flex flex-col gap-4">
+        {recent.length > 0 && (
+          <div className="mb-4">
+            <p className="mb-2 text-xs font-medium text-muted">Repetir lançamento recente</p>
+            <div className="flex flex-wrap gap-2">
+              {recent.map((r, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => applyRecent(r)}
+                  className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-2.5 py-1.5 text-xs transition-colors hover:border-[color:var(--color-border-strong)] hover:bg-surface-2"
+                >
+                  <span className="max-w-[140px] truncate font-medium">{r.description || "Sem descrição"}</span>
+                  <span className={direction === "entrada" ? "text-positive" : "text-negative"}>
+                    {currencySymbol(r.currency)} {r.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <form
+          key={formKey}
+          action={submit(createCashEntry, () => setEntryOpen(false))}
+          className="flex flex-col gap-4"
+        >
           <input type="hidden" name="direction" value={direction} />
           <input type="hidden" name="project_id" value={scope === "projeto" ? projectId : ""} />
           <div className="grid grid-cols-3 gap-3">
             <Field label="Valor">
-              <Input name="amount" inputMode="decimal" placeholder="0,00" required />
+              <Input name="amount" inputMode="decimal" placeholder="0,00" defaultValue={prefill.amount ?? ""} required />
             </Field>
             <Field label="Moeda">
-              <Select name="currency" defaultValue={currencies[0] ?? "brl"}>
+              <Select name="currency" defaultValue={prefill.currency ?? currencies[0] ?? "brl"}>
                 {currencies.map((c) => (
                   <option key={c} value={c}>{normalizeCurrency(c)}</option>
                 ))}
@@ -377,22 +453,20 @@ export function CaixaClient({
             </Field>
           </div>
           <Field label="Descrição">
-            <Input name="description" placeholder="Ex: Pagamento gestor" />
+            <Input name="description" placeholder="Ex: Pagamento gestor" defaultValue={prefill.description ?? ""} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Categoria">
-              <Input name="category" placeholder="Ex: pró-labore, ferramentas" />
+              <Input name="category" placeholder="Ex: pró-labore, ferramentas" defaultValue={prefill.category ?? ""} />
             </Field>
-            {scope === "pessoal" && (
-              <Field label="Conta (opcional)">
-                <Select name="bank_account_id" defaultValue="">
-                  <option value="">Não vincular</option>
-                  {banks.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </Select>
-              </Field>
-            )}
+            <Field label="Carteira (opcional)">
+              <Select name="bank_account_id" defaultValue="">
+                <option value="">Não vincular</option>
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </Select>
+            </Field>
           </div>
           {/* Opt-in para dashboard */}
           <label className="flex items-center gap-2 text-sm">

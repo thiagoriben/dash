@@ -5,6 +5,7 @@ import Link from "next/link"
 import type {
   ActivityLog,
   AdAccount,
+  BankAccount,
   CardCharge,
   CashEntry,
   Creative,
@@ -35,10 +36,12 @@ import { TabReceivables } from "./tab-receivables"
 import { TabAdAccounts } from "./tab-ad-accounts"
 import { TabHistory } from "./tab-history"
 import { EditProjectModal } from "./edit-project-modal"
+import { CaixaClient } from "@/components/caixa-client"
 import type { ProjectMemberWithProfile } from "@/lib/data"
 
 const TABS = [
   "Visão geral",
+  "Caixa",
   "Vendas",
   "Recebíveis",
   "Produtos",
@@ -75,6 +78,9 @@ export function ProjectDetail(props: {
   isAdmin?: boolean
   prefs: Prefs | null
   usdBrl: number
+  banks: BankAccount[]
+  currencies: string[]
+  meId: string
 }) {
   const { project } = props
   const canManage = props.isOwner || props.isAdmin
@@ -123,7 +129,7 @@ export function ProjectDetail(props: {
           >
             {t}
             {tab === t ? (
-              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary shadow-[0_0_8px_rgba(45,226,230,0.6)]" />
+              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary shadow-[0_0_8px_rgba(41,245,126,0.6)]" />
             ) : null}
           </button>
         ))}
@@ -143,6 +149,18 @@ export function ProjectDetail(props: {
             profitBase={props.prefs?.profit_base ?? "ads"}
             metaTaxPct={props.prefs?.meta_tax_pct ?? 0}
             widgets={props.prefs?.project_widgets}
+          />
+        )}
+        {tab === "Caixa" && (
+          <CaixaClient
+            entries={props.cashEntries}
+            projects={[project]}
+            banks={props.banks}
+            profiles={props.profiles}
+            meId={props.meId}
+            usdBrl={props.usdBrl}
+            currencies={props.currencies}
+            lockedProjectId={project.id}
           />
         )}
         {tab === "Vendas" && (

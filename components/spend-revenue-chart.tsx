@@ -27,24 +27,24 @@ export function SpendRevenueChart({ data }: { data: TimePoint[] }) {
         <AreaChart data={formatted} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
           <defs>
             <linearGradient id="gRevenue" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2de2e6" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#2de2e6" stopOpacity={0} />
+              <stop offset="0%" stopColor="#29f57e" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="#29f57e" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="gSpend" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3} />
-              <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
+              <stop offset="0%" stopColor="#ff9838" stopOpacity={0.3} />
+              <stop offset="100%" stopColor="#ff9838" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fill: "#8a93a8", fontSize: 11 }}
+            tick={{ fill: "#9098a3", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             minTickGap={24}
           />
           <YAxis
-            tick={{ fill: "#8a93a8", fontSize: 11 }}
+            tick={{ fill: "#9098a3", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             width={64}
@@ -52,13 +52,13 @@ export function SpendRevenueChart({ data }: { data: TimePoint[] }) {
           />
           <Tooltip
             contentStyle={{
-              background: "#0f1524",
+              background: "#16191d",
               border: "1px solid rgba(255,255,255,0.1)",
               borderRadius: 12,
-              color: "#e8ecf4",
+              color: "#f1f3f5",
               fontSize: 12,
             }}
-            labelStyle={{ color: "#8a93a8" }}
+            labelStyle={{ color: "#9098a3" }}
             formatter={(value: number, name) => [
               formatCurrency(value),
               name === "revenue" ? "Faturamento" : "Gasto",
@@ -67,14 +67,14 @@ export function SpendRevenueChart({ data }: { data: TimePoint[] }) {
           <Area
             type="monotone"
             dataKey="revenue"
-            stroke="#2de2e6"
+            stroke="#29f57e"
             strokeWidth={2}
             fill="url(#gRevenue)"
           />
           <Area
             type="monotone"
             dataKey="spend"
-            stroke="#8b5cf6"
+            stroke="#ff9838"
             strokeWidth={2}
             fill="url(#gSpend)"
           />

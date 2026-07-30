@@ -8,8 +8,9 @@ import { createProject } from "@/app/actions/projects"
 import { Button, Badge, Field, Input, Select, Card } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { SelectOrOther } from "@/components/select-or-other"
-import { Plus, FolderKanban, Globe, Lock, Users, ArrowUpRight } from "lucide-react"
+import { Plus, FolderKanban, Globe, Lock, Users, ArrowUpRight, Search } from "lucide-react"
 import { DEFAULT_CURRENCIES, DEFAULT_OFFER_TYPES, DEFAULT_REGIONS } from "@/lib/currency"
+import { cn } from "@/lib/utils"
 
 const statusTone = {
   ativo: "positive",
@@ -18,6 +19,14 @@ const statusTone = {
 } as const
 
 const visIcon = { publico: Globe, privado: Lock, restrito: Users }
+
+type VisFilter = "todos" | "privado" | "restrito" | "publico"
+const VIS_FILTERS: { key: VisFilter; label: string }[] = [
+  { key: "todos", label: "Todos" },
+  { key: "privado", label: "Individuais" },
+  { key: "restrito", label: "Restritos" },
+  { key: "publico", label: "Públicos" },
+]
 
 export function ProjectsClient({
   projects,
@@ -29,7 +38,17 @@ export function ProjectsClient({
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
   const [pending, startTransition] = useTransition()
+  const [visFilter, setVisFilter] = useState<VisFilter>("todos")
+  const [query, setQuery] = useState("")
   const router = useRouter()
+
+  const filtered = projects.filter((p) => {
+    if (visFilter !== "todos" && p.visibility !== visFilter) return false
+    if (query.trim() && !p.name.toLowerCase().includes(query.trim().toLowerCase())) return false
+    return true
+  })
+  const countBy = (key: VisFilter) =>
+    key === "todos" ? projects.length : projects.filter((p) => p.visibility === key).length
 
   const regions = prefs?.regions?.length ? prefs.regions : DEFAULT_REGIONS
   const offers = prefs?.offer_types?.length ? prefs.offer_types : DEFAULT_OFFER_TYPES
@@ -60,6 +79,47 @@ export function ProjectsClient({
         </Button>
       </div>
 
+      {projects.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex flex-wrap rounded-xl border border-[color:var(--color-border)] p-1">
+            {VIS_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setVisFilter(f.key)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  visFilter === f.key
+                    ? "bg-primary text-[color:var(--color-accent-fg)]"
+                    : "text-muted hover:text-foreground",
+                )}
+              >
+                {f.label}
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 text-xs",
+                    visFilter === f.key ? "bg-black/20" : "bg-surface-2 text-muted",
+                  )}
+                >
+                  {countBy(f.key)}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="relative">
+            <Search
+              size={15}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+            />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar projeto…"
+              className="h-9 w-[220px] pl-9"
+            />
+          </div>
+        </div>
+      )}
+
       {projects.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 p-12 text-center">
           <FolderKanban size={32} className="text-muted" />
@@ -74,7 +134,12 @@ export function ProjectsClient({
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map((p) => {
+          {filtered.length === 0 && (
+            <p className="col-span-full py-8 text-center text-sm text-muted">
+              Nenhum projeto encontrado com esse filtro.
+            </p>
+          )}
+          {filtered.map((p) => {
             const Vis = visIcon[p.visibility]
             return (
               <Link key={p.id} href={`/projetos/${p.id}`} prefetch>
