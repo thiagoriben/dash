@@ -67,10 +67,29 @@ export function TabChat({
     }
   }, [projectId, supabase])
 
+  // Fallback: recarrega a cada 8s caso o canal realtime não entregue.
+  useEffect(() => {
+    const t = setInterval(() => {
+      void refresh()
+    }, 8000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
   // Rola pro fim quando chega mensagem.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
   }, [messages])
+
+  async function refresh() {
+    const { data } = await supabase
+      .from("chat_messages")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .limit(100)
+    setMessages(((data ?? []) as ChatMessage[]).reverse())
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -80,7 +99,13 @@ export function TabChat({
     setText("")
     startTransition(async () => {
       const res = await sendChatMessage(projectId, body)
-      if (res?.error) setText(body) // devolve o texto em caso de erro
+      if (res?.error) {
+        setText(body) // devolve o texto em caso de erro
+        return
+      }
+      // Recarrega do banco: garante que a mensagem apareça mesmo se o
+      // canal realtime não estiver autenticado para receber o evento.
+      await refresh()
     })
   }
 

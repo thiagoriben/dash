@@ -501,7 +501,8 @@ create policy chat_select on public.chat_messages for select
   to authenticated using (public.has_project_access(project_id, auth.uid()) or public.is_admin(auth.uid()));
 create policy chat_insert on public.chat_messages for insert
   to authenticated with check (
-    sender_id = auth.uid() and public.has_project_access(project_id, auth.uid())
+    sender_id = auth.uid()
+    and (public.has_project_access(project_id, auth.uid()) or public.is_admin(auth.uid()))
   );
 create policy chat_delete on public.chat_messages for delete
   to authenticated using (sender_id = auth.uid() or public.is_project_owner(project_id, auth.uid()) or public.is_admin(auth.uid()));
