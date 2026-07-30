@@ -17,6 +17,7 @@ import {
   getProjectMembers,
   getBankAccounts,
   getProjectJoinRequests,
+  getCustomMetrics,
   resolveRange,
   type Period,
 } from "@/lib/data"
@@ -61,6 +62,7 @@ export default async function ProjectPage({
     activity,
     banks,
     joinRequests,
+    customMetrics,
   ] = await Promise.all([
     getExpenses([id], from, to),
     getDailyMetrics([id], from, to),
@@ -78,6 +80,7 @@ export default async function ProjectPage({
     getActivity({ projectId: id, limit: 60 }),
     getBankAccounts(profile),
     getProjectJoinRequests(id),
+    getCustomMetrics(profile.id, id),
   ])
   const currencies = profile.prefs?.currencies ?? DEFAULT_CURRENCIES
 
@@ -111,6 +114,7 @@ export default async function ProjectPage({
       currencies={currencies}
       meId={profile.id}
       joinRequests={joinRequests}
+      customMetrics={customMetrics}
     />
   )
 }

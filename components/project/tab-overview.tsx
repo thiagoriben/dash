@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { CardCharge, CashEntry, DailyMetric, Expense, Project, Sale, SpendView, ProfitBase } from "@/lib/types"
+import type { CardCharge, CashEntry, CustomMetric, DailyMetric, Expense, Project, Sale, SpendView, ProfitBase } from "@/lib/types"
+import { CustomMetricsSection } from "@/components/custom-metrics-section"
 import { timeSeries } from "@/lib/aggregate"
 import { buildBreakdown } from "@/lib/money"
 import { buildWidget, resolveWidgets, DEFAULT_PROJECT_WIDGETS } from "@/lib/dashboard-widgets"
@@ -37,6 +38,7 @@ export function TabOverview({
   profitBase: initialBase = "ads",
   metaTaxPct = 0,
   widgets,
+  customMetrics = [],
 }: {
   project: Project
   metrics: DailyMetric[]
@@ -49,6 +51,7 @@ export function TabOverview({
   profitBase?: ProfitBase
   metaTaxPct?: number
   widgets?: string[]
+  customMetrics?: CustomMetric[]
 }) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -137,6 +140,12 @@ export function TabOverview({
           return <KpiCard key={k} label={w.label} value={w.value} hint={w.hint ?? undefined} accent={w.accent} />
         })}
       </div>
+
+      <CustomMetricsSection
+        metrics={customMetrics}
+        projectId={project.id}
+        isX1={(project.offer_type ?? "").toLowerCase() === "x1"}
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

@@ -13,6 +13,11 @@ import type {
   Project,
   ProfitSplit,
   Sale,
+  CustomMetric,
+  ShortcutCategory,
+  Shortcut,
+  Note,
+  TodoItem,
 } from "./types"
 
 export type Period = "hoje" | "7d" | "30d" | "90d" | "mes" | "ano" | "tudo"
@@ -495,4 +500,51 @@ export async function getDirectMessages(meId: string, otherId: string): Promise<
     .order("created_at", { ascending: true })
     .limit(200)
   return (data ?? []) as DirectMessage[]
+}
+
+/* ======================= PRODUTIVIDADE / ORGANIZAÇÃO ======================= */
+
+/** Métricas personalizadas de um escopo (projeto, ou pessoal quando projectId null). */
+export async function getCustomMetrics(ownerId: string, projectId: string | null): Promise<CustomMetric[]> {
+  const supabase = await createClient()
+  let q = supabase.from("custom_metrics").select("*").order("position", { ascending: true })
+  q = projectId ? q.eq("project_id", projectId) : q.is("project_id", null).eq("owner_id", ownerId)
+  const { data } = await q
+  return (data ?? []) as CustomMetric[]
+}
+
+/** Categorias de atalhos/notas de um escopo. */
+export async function getShortcutCategories(ownerId: string, projectId: string | null): Promise<ShortcutCategory[]> {
+  const supabase = await createClient()
+  let q = supabase.from("shortcut_categories").select("*").order("position", { ascending: true })
+  q = projectId ? q.eq("project_id", projectId) : q.is("project_id", null).eq("owner_id", ownerId)
+  const { data } = await q
+  return (data ?? []) as ShortcutCategory[]
+}
+
+/** Atalhos de um escopo. */
+export async function getShortcuts(ownerId: string, projectId: string | null): Promise<Shortcut[]> {
+  const supabase = await createClient()
+  let q = supabase.from("shortcuts").select("*").order("position", { ascending: true }).order("created_at")
+  q = projectId ? q.eq("project_id", projectId) : q.is("project_id", null).eq("owner_id", ownerId)
+  const { data } = await q
+  return (data ?? []) as Shortcut[]
+}
+
+/** Notas de um escopo. */
+export async function getNotes(ownerId: string, projectId: string | null): Promise<Note[]> {
+  const supabase = await createClient()
+  let q = supabase.from("notes").select("*").order("updated_at", { ascending: false })
+  q = projectId ? q.eq("project_id", projectId) : q.is("project_id", null).eq("owner_id", ownerId)
+  const { data } = await q
+  return (data ?? []) as Note[]
+}
+
+/** Itens de to-do de um escopo. */
+export async function getTodos(ownerId: string, projectId: string | null): Promise<TodoItem[]> {
+  const supabase = await createClient()
+  let q = supabase.from("todo_items").select("*").order("position", { ascending: true }).order("created_at")
+  q = projectId ? q.eq("project_id", projectId) : q.is("project_id", null).eq("owner_id", ownerId)
+  const { data } = await q
+  return (data ?? []) as TodoItem[]
 }

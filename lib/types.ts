@@ -239,3 +239,76 @@ export type BankAccount = {
   currency: Currency
   created_at: string
 }
+
+/** Tipo do valor de uma métrica personalizada. */
+export type MetricKind = "quantidade" | "valor" | "percentual"
+
+/** Métrica personalizada (dashboard pessoal quando project_id é null). */
+export type CustomMetric = {
+  id: string
+  owner_id: string
+  project_id: string | null
+  name: string
+  kind: MetricKind
+  value: number
+  icon: string | null
+  position: number
+  hidden: boolean
+  created_at: string
+}
+
+/** Categoria de atalhos/notas (global do usuário quando project_id é null). */
+export type ShortcutCategory = {
+  id: string
+  owner_id: string
+  project_id: string | null
+  name: string
+  color: string | null
+  position: number
+  created_at: string
+}
+
+export type ShortcutKind = "link" | "imagem" | "video" | "nota" | "id"
+
+/** Atalho salvo (link, id, imagem, vídeo, texto). */
+export type Shortcut = {
+  id: string
+  owner_id: string
+  project_id: string | null
+  category_id: string | null
+  title: string
+  url: string | null
+  body: string | null
+  kind: ShortcutKind
+  position: number
+  created_at: string
+}
+
+/** Nota do bloco de notas. */
+export type Note = {
+  id: string
+  owner_id: string
+  project_id: string | null
+  category_id: string | null
+  title: string
+  body: string | null
+  visibility: "privado" | "compartilhado"
+  created_at: string
+  updated_at: string
+}
+
+export type TodoDueKind = "hoje" | "amanha" | "sem_prazo"
+
+/** Item de to-do (pessoal quando project_id é null). */
+export type TodoItem = {
+  id: string
+  owner_id: string
+  project_id: string | null
+  assignee_id: string | null
+  category: string | null
+  title: string
+  done: boolean
+  due_kind: TodoDueKind
+  position: number
+  created_at: string
+}

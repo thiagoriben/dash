@@ -9,6 +9,7 @@ import {
   getSales,
   getCardCharges,
   getCashEntries,
+  getCustomMetrics,
   resolveRange,
   type Period,
 } from "@/lib/data"
@@ -31,6 +32,7 @@ import { DashboardControls } from "@/components/dashboard-controls"
 import { HistoryPopover } from "@/components/history-popover"
 import { Card, CardContent, CardHeader, CardTitle, Badge } from "@/components/ui"
 import { AlertsPanel } from "@/components/alerts-panel"
+import { CustomMetricsSection } from "@/components/custom-metrics-section"
 import { Rocket, Trophy } from "lucide-react"
 
 const ALL_WIDGETS = Object.keys(WIDGET_LABELS) as WidgetKey[]
@@ -65,12 +67,13 @@ export default async function DashboardPage({
   if (sp.offer) projects = projects.filter((p) => p.offer_type?.toLowerCase() === sp.offer!.toLowerCase())
 
   const projectIds = projects.map((p) => p.id)
-  const [expenses, metrics, sales, cardCharges, allCash] = await Promise.all([
+  const [expenses, metrics, sales, cardCharges, allCash, customMetrics] = await Promise.all([
     getExpenses(projectIds, from, to),
     getDailyMetrics(projectIds, from, to),
     getSales(projectIds, from, to),
     getCardCharges(projectIds, from, to),
     getCashEntries(profile),
+    getCustomMetrics(profile.id, null),
   ])
 
   // Caixa que reflete na dash: dentro do período e ligado a projetos filtrados (ou pessoal opt-in).
@@ -171,6 +174,8 @@ export default async function DashboardPage({
               )
             })}
           </div>
+
+          <CustomMetricsSection metrics={customMetrics} projectId={null} />
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Card className="lg:col-span-2">
