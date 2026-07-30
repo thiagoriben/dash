@@ -75,6 +75,7 @@ export default async function ProjectPage({
 
   const owner = profiles.find((p) => p.id === project.owner_id) ?? null
   const isOwner = project.owner_id === profile.id
+  const isAdmin = profile.role === "admin"
 
   return (
     <ProjectDetail
@@ -95,6 +96,7 @@ export default async function ProjectPage({
       activity={activity}
       owner={owner}
       isOwner={isOwner}
+      isAdmin={isAdmin}
       prefs={profile.prefs}
       usdBrl={usdBrl}
     />

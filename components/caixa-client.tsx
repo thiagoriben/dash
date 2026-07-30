@@ -27,14 +27,28 @@ import {
 
 const today = () => new Date().toISOString().slice(0, 10)
 type Scope = "pessoal" | "projeto"
-type PeriodKey = "semana" | "mes" | "tudo"
+type PeriodKey = "hoje" | "7d" | "30d" | "90d" | "mesatual" | "tudo"
+
+const PERIODS: { key: PeriodKey; label: string }[] = [
+  { key: "hoje", label: "Hoje" },
+  { key: "7d", label: "7 dias" },
+  { key: "30d", label: "30 dias" },
+  { key: "90d", label: "90 dias" },
+  { key: "mesatual", label: "Este mês" },
+  { key: "tudo", label: "Tudo" },
+]
 
 function periodStart(key: PeriodKey): Date | null {
   if (key === "tudo") return null
   const d = new Date()
-  if (key === "semana") d.setDate(d.getDate() - 7)
-  else d.setDate(d.getDate() - 30)
   d.setHours(0, 0, 0, 0)
+  if (key === "hoje") return d
+  if (key === "mesatual") {
+    d.setDate(1)
+    return d
+  }
+  const days = key === "7d" ? 7 : key === "30d" ? 30 : 90
+  d.setDate(d.getDate() - days)
   return d
 }
 
@@ -57,7 +71,9 @@ export function CaixaClient({
 }) {
   const [scope, setScope] = useState<Scope>("pessoal")
   const [projectId, setProjectId] = useState<string>(projects[0]?.id ?? "")
-  const [period, setPeriod] = useState<PeriodKey>("mes")
+  const [period, setPeriod] = useState<PeriodKey>("30d")
+  const [customFrom, setCustomFrom] = useState("")
+  const [customTo, setCustomTo] = useState("")
   const [entryOpen, setEntryOpen] = useState(false)
   const [direction, setDirection] = useState<"entrada" | "saida">("entrada")
   const [transferOpen, setTransferOpen] = useState(false)
@@ -67,10 +83,18 @@ export function CaixaClient({
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
-  const start = periodStart(period)
+  const custom = Boolean(customFrom || customTo)
+  const start = custom
+    ? customFrom
+      ? new Date(customFrom + "T00:00:00")
+      : null
+    : periodStart(period)
+  const end = custom && customTo ? new Date(customTo + "T23:59:59") : null
   const inPeriod = (iso: string) => {
-    if (!start) return true
-    return new Date(iso + "T00:00:00") >= start
+    const d = new Date(iso + "T00:00:00")
+    if (start && d < start) return false
+    if (end && d > end) return false
+    return true
   }
 
   // Filtra as movimentações do escopo atual.
@@ -80,7 +104,8 @@ export function CaixaClient({
       if (scope === "pessoal") return c.project_id === null && c.owner_id === meId
       return c.project_id === projectId
     })
-  }, [entries, scope, projectId, meId, period])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, scope, projectId, meId, period, customFrom, customTo])
 
   const { saldo, entradas, saidas } = useMemo(() => {
     let e = 0
@@ -168,18 +193,53 @@ export function CaixaClient({
             ))}
           </Select>
         )}
-        <div className="inline-flex rounded-xl border border-[color:var(--color-border)] p-1">
-          {(["semana", "mes", "tudo"] as PeriodKey[]).map((k) => (
+        <div className="inline-flex flex-wrap rounded-xl border border-[color:var(--color-border)] p-1">
+          {PERIODS.map((p) => (
             <button
-              key={k}
-              onClick={() => setPeriod(k)}
+              key={p.key}
+              onClick={() => {
+                setPeriod(p.key)
+                setCustomFrom("")
+                setCustomTo("")
+              }}
               className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                period === k ? "bg-accent text-accent-fg" : "text-muted hover:text-foreground"
+                !custom && period === p.key
+                  ? "bg-accent text-accent-fg"
+                  : "text-muted hover:text-foreground"
               }`}
             >
-              {k === "semana" ? "7 dias" : k === "mes" ? "30 dias" : "Tudo"}
+              {p.label}
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            aria-label="Data inicial"
+            value={customFrom}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            className="h-9 w-auto"
+          />
+          <span className="text-xs text-muted">até</span>
+          <Input
+            type="date"
+            aria-label="Data final"
+            value={customTo}
+            onChange={(e) => setCustomTo(e.target.value)}
+            className="h-9 w-auto"
+          />
+          {custom && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setCustomFrom("")
+                setCustomTo("")
+              }}
+            >
+              Limpar
+            </Button>
+          )}
         </div>
       </div>
 

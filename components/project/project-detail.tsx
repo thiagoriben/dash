@@ -72,10 +72,12 @@ export function ProjectDetail(props: {
   activity: ActivityLog[]
   owner: Profile | null
   isOwner: boolean
+  isAdmin?: boolean
   prefs: Prefs | null
   usdBrl: number
 }) {
   const { project } = props
+  const canManage = props.isOwner || props.isAdmin
   const [tab, setTab] = useState<Tab>("Visão geral")
   const [editing, setEditing] = useState(false)
 
@@ -100,7 +102,7 @@ export function ProjectDetail(props: {
             <Badge tone="primary">{project.region}</Badge>
             <Badge tone="secondary">{project.currency}</Badge>
             {project.offer_type ? <Badge tone="default">{project.offer_type}</Badge> : null}
-            {props.isOwner && (
+            {canManage && (
               <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
                 <Pencil size={14} /> Editar
               </Button>
@@ -222,6 +224,7 @@ export function ProjectDetail(props: {
         <EditProjectModal
           project={project}
           prefs={props.prefs}
+          canDelete={canManage}
           onClose={() => setEditing(false)}
         />
       )}

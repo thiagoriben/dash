@@ -15,12 +15,17 @@ import type {
   Sale,
 } from "./types"
 
-export type Period = "7d" | "30d" | "90d" | "ano" | "tudo"
+export type Period = "hoje" | "7d" | "30d" | "90d" | "mes" | "ano" | "tudo"
 
 export function periodStartDate(period: Period): string | null {
   if (period === "tudo") return null
-  const days = period === "7d" ? 7 : period === "30d" ? 30 : period === "90d" ? 90 : 365
   const d = new Date()
+  if (period === "hoje") return d.toISOString().slice(0, 10)
+  if (period === "mes") {
+    d.setDate(1)
+    return d.toISOString().slice(0, 10)
+  }
+  const days = period === "7d" ? 7 : period === "30d" ? 30 : period === "90d" ? 90 : 365
   d.setDate(d.getDate() - days)
   return d.toISOString().slice(0, 10)
 }

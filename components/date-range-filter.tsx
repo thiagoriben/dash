@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils"
 import { CalendarDays } from "lucide-react"
 
 const PRESETS = [
+  { key: "hoje", label: "Hoje" },
   { key: "7d", label: "7 dias" },
   { key: "30d", label: "30 dias" },
   { key: "90d", label: "90 dias" },
+  { key: "mes", label: "Este mês" },
   { key: "ano", label: "1 ano" },
   { key: "tudo", label: "Tudo" },
 ] as const

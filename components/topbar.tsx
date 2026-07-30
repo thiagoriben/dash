@@ -8,9 +8,11 @@ import { CalendarRange, LogOut, DollarSign, Loader2 } from "lucide-react"
 import type { Period } from "@/lib/data"
 
 const periods: { value: Period; label: string }[] = [
+  { value: "hoje", label: "Hoje" },
   { value: "7d", label: "Últimos 7 dias" },
   { value: "30d", label: "Últimos 30 dias" },
   { value: "90d", label: "Últimos 90 dias" },
+  { value: "mes", label: "Este mês" },
   { value: "ano", label: "Último ano" },
   { value: "tudo", label: "Todo período" },
 ]

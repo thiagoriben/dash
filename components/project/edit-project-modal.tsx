@@ -3,25 +3,38 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { Prefs, Project } from "@/lib/types"
-import { updateProject } from "@/app/actions/projects"
+import { deleteProject, updateProject } from "@/app/actions/projects"
 import { Button, Field, Input, Select } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { SelectOrOther } from "@/components/select-or-other"
 import { DEFAULT_CURRENCIES, DEFAULT_OFFER_TYPES, DEFAULT_REGIONS } from "@/lib/currency"
+import { Trash2 } from "lucide-react"
 
 export function EditProjectModal({
   project,
   prefs,
+  canDelete,
   onClose,
 }: {
   project: Project
   prefs: Prefs | null
+  canDelete?: boolean
   onClose: () => void
 }) {
   const [open, setOpen] = useState(true)
   const [error, setError] = useState<string>()
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+
+  function onDelete() {
+    setError(undefined)
+    startTransition(async () => {
+      const res = await deleteProject(project.id)
+      if (res?.error) setError(res.error)
+      else router.push("/projetos")
+    })
+  }
 
   function close() {
     setOpen(false)
@@ -94,13 +107,45 @@ export function EditProjectModal({
             </Field>
           </div>
           {error ? <p className="text-sm text-negative">{error}</p> : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" type="button" onClick={() => setOpen(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? "Salvando..." : "Salvar"}
-            </Button>
+          <div className="flex items-center justify-between gap-2">
+            {canDelete ? (
+              confirmDelete ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-negative">Excluir mesmo?</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={onDelete}
+                    disabled={pending}
+                    className="text-negative hover:bg-negative/10"
+                  >
+                    <Trash2 size={14} /> {pending ? "Excluindo..." : "Confirmar"}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setConfirmDelete(false)}>
+                    Não
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setConfirmDelete(true)}
+                  className="text-negative hover:bg-negative/10"
+                >
+                  <Trash2 size={14} /> Excluir
+                </Button>
+              )
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" type="button" onClick={() => setOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>
