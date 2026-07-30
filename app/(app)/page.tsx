@@ -221,6 +221,7 @@ export default async function DashboardPage({
                       <Link
                         key={r.project.id}
                         href={`/projetos/${r.project.id}`}
+                        prefetch
                         className="group flex items-center gap-4 rounded-xl px-2 py-2 hover:bg-white/5"
                       >
                         <span className="w-5 text-center font-mono text-sm text-muted">{i + 1}</span>

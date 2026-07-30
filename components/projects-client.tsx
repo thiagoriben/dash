@@ -77,7 +77,7 @@ export function ProjectsClient({
           {projects.map((p) => {
             const Vis = visIcon[p.visibility]
             return (
-              <Link key={p.id} href={`/projetos/${p.id}`}>
+              <Link key={p.id} href={`/projetos/${p.id}`} prefetch>
                 <Card className="group h-full p-5">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary">
