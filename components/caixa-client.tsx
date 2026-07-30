@@ -90,6 +90,12 @@ export function CaixaClient({
   }>({})
   const [formKey, setFormKey] = useState(0)
   const [transferOpen, setTransferOpen] = useState(false)
+  // Origem/destino da transferência: "pessoal" (carteira), "projeto" ou "socio".
+  const [fromKind, setFromKind] = useState<"pessoal" | "projeto">("pessoal")
+  const [fromProj, setFromProj] = useState("")
+  const [toKind, setToKind] = useState<"pessoal" | "projeto" | "socio">("projeto")
+  const [toProj, setToProj] = useState("")
+  const [toSocio, setToSocio] = useState("")
   const [bankOpen, setBankOpen] = useState(false)
   const [editingBank, setEditingBank] = useState<BankAccount | null>(null)
   const [error, setError] = useState<string>()
@@ -184,6 +190,21 @@ export function CaixaClient({
     setBankOpen(true)
   }
 
+  function openTransfer() {
+    setError(undefined)
+    if (scope === "projeto" && projectId) {
+      setFromKind("projeto")
+      setFromProj(projectId)
+      setToKind("pessoal")
+    } else {
+      setFromKind("pessoal")
+      setToKind("projeto")
+      setToProj(projects[0]?.id ?? "")
+    }
+    setToSocio("")
+    setTransferOpen(true)
+  }
+
   function submit(fn: (fd: FormData) => Promise<{ error?: string; ok?: boolean }>, close: () => void) {
     return (formData: FormData) => {
       setError(undefined)
@@ -213,7 +234,7 @@ export function CaixaClient({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="ghost" onClick={() => setTransferOpen(true)}>
+          <Button size="sm" variant="ghost" onClick={openTransfer}>
             <ArrowLeftRight size={16} /> Transferir
           </Button>
           <Button size="sm" variant="ghost" onClick={() => openNew("saida")}>
@@ -490,47 +511,86 @@ export function CaixaClient({
       </Modal>
 
       {/* Modal transferência */}
-      <Modal open={transferOpen} onClose={() => setTransferOpen(false)} title="Transferir entre caixas">
+      <Modal open={transferOpen} onClose={() => setTransferOpen(false)} title="Transferir saldo">
         <form action={submit(transferCash, () => setTransferOpen(false))} className="flex flex-col gap-4">
           <p className="text-sm text-muted">
-            Move saldo entre seu caixa pessoal, o caixa de um projeto ou outro sócio. Sai de uma origem e entra no destino.
+            Escolha de onde o dinheiro sai e para onde vai. Carteira é o seu caixa pessoal; caixa é o de um projeto.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Origem (projeto)">
-              <Select name="from_project_id" defaultValue={scope === "projeto" ? projectId : ""}>
-                <option value="">Meu caixa pessoal</option>
+
+          {/* Campos derivados que o backend espera */}
+          <input type="hidden" name="from_project_id" value={fromKind === "projeto" ? fromProj : ""} />
+          <input type="hidden" name="to_project_id" value={toKind === "projeto" ? toProj : ""} />
+          <input type="hidden" name="to_user_id" value={toKind === "socio" ? toSocio : ""} />
+
+          {/* ORIGEM */}
+          <div className="rounded-xl border border-[color:var(--color-border)] p-3">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted">
+              <ArrowUpRight size={14} className="text-negative" /> De onde sai
+            </div>
+            <div className="mb-2 inline-flex rounded-lg border border-[color:var(--color-border)] p-1">
+              <TransferTab active={fromKind === "pessoal"} onClick={() => setFromKind("pessoal")}>
+                Minha carteira
+              </TransferTab>
+              <TransferTab active={fromKind === "projeto"} onClick={() => setFromKind("projeto")}>
+                Caixa de projeto
+              </TransferTab>
+            </div>
+            {fromKind === "projeto" ? (
+              <Select value={fromProj} onChange={(e) => setFromProj(e.target.value)}>
+                <option value="">Selecione o projeto</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </Select>
-            </Field>
-            <Field label="Destino (projeto)">
-              <Select name="to_project_id" defaultValue="">
-                <option value="">Caixa pessoal</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </Select>
-            </Field>
+            ) : (
+              <Field label="Conta/carteira (opcional)">
+                <Select name="bank_account_id" defaultValue="">
+                  <option value="">Não vincular a uma conta</option>
+                  {banks.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </Select>
+              </Field>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Sócio destino (opcional)">
-              <Select name="to_user_id" defaultValue="">
-                <option value="">Eu mesmo</option>
+
+          {/* DESTINO */}
+          <div className="rounded-xl border border-[color:var(--color-border)] p-3">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted">
+              <ArrowDownRight size={14} className="text-positive" /> Para onde vai
+            </div>
+            <div className="mb-2 inline-flex rounded-lg border border-[color:var(--color-border)] p-1">
+              <TransferTab active={toKind === "pessoal"} onClick={() => setToKind("pessoal")}>
+                Minha carteira
+              </TransferTab>
+              <TransferTab active={toKind === "projeto"} onClick={() => setToKind("projeto")}>
+                Caixa de projeto
+              </TransferTab>
+              <TransferTab active={toKind === "socio"} onClick={() => setToKind("socio")}>
+                Sócio
+              </TransferTab>
+            </div>
+            {toKind === "projeto" && (
+              <Select value={toProj} onChange={(e) => setToProj(e.target.value)}>
+                <option value="">Selecione o projeto</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </Select>
+            )}
+            {toKind === "socio" && (
+              <Select value={toSocio} onChange={(e) => setToSocio(e.target.value)}>
+                <option value="">Selecione o sócio</option>
                 {profiles.filter((p) => p.id !== meId).map((p) => (
-                  <option key={p.id} value={p.id}>{p.username}</option>
+                  <option key={p.id} value={p.id}>{p.full_name || p.username}</option>
                 ))}
               </Select>
-            </Field>
-            <Field label="Conta pessoal (opcional)">
-              <Select name="bank_account_id" defaultValue="">
-                <option value="">Não vincular</option>
-                {banks.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </Select>
-            </Field>
+            )}
+            {toKind === "pessoal" && (
+              <p className="text-xs text-muted">Entra na sua carteira pessoal.</p>
+            )}
           </div>
+
           <div className="grid grid-cols-3 gap-3">
             <Field label="Valor">
               <Input name="amount" inputMode="decimal" placeholder="0,00" required />
@@ -614,6 +674,28 @@ function ScopeTab({
       }`}
     >
       {icon}
+      {children}
+    </button>
+  )
+}
+
+function TransferTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+        active ? "bg-accent text-accent-fg" : "text-muted hover:text-foreground"
+      }`}
+    >
       {children}
     </button>
   )

@@ -123,20 +123,19 @@ export function ProjectDetail(props: {
         </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b border-[color:var(--color-border)] pb-px">
+      <div className="flex flex-wrap gap-1.5 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)]/40 p-1.5">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              "relative whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors",
-              tab === t ? "text-primary" : "text-muted hover:text-foreground",
+              "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+              tab === t
+                ? "bg-primary/15 text-primary shadow-[0_0_0_1px_rgba(41,245,126,0.3)]"
+                : "text-muted hover:bg-white/5 hover:text-foreground",
             )}
           >
             {t}
-            {tab === t ? (
-              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary shadow-[0_0_8px_rgba(41,245,126,0.6)]" />
-            ) : null}
           </button>
         ))}
       </div>
