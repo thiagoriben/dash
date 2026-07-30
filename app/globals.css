@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: #070b14;
+  --color-foreground: #e8ecf4;
+  --color-muted: #8a93a8;
+  --color-surface: #0f1524;
+  --color-surface-2: #131a2c;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+
+  --color-primary: #2de2e6;
+  --color-secondary: #8b5cf6;
+  --color-positive: #34e4a0;
+  --color-negative: #ff5c7c;
+  --color-warning: #ffb454;
+
+  /* aliases usados na UI */
+  --color-success: #34e4a0;
+  --color-danger: #ff5c7c;
+  --color-accent: #2de2e6;
+  --color-accent-fg: #04121a;
+  --accent: #2de2e6;
+  --accent-fg: #04121a;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "JetBrains Mono", monospace;
+
+  --radius: 14px;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  background-color: #070b14;
+  color-scheme: dark;
+}
+
+body {
+  background-color: #070b14;
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+  position: relative;
+}
+
+/* Aurora glow background */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60rem 40rem at 10% -10%, rgba(45, 226, 230, 0.1), transparent 60%),
+    radial-gradient(50rem 40rem at 100% 0%, rgba(139, 92, 246, 0.12), transparent 55%),
+    radial-gradient(50rem 50rem at 80% 110%, rgba(45, 226, 230, 0.06), transparent 60%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at 50% 30%, black, transparent 90%);
+}
+
+#app-root {
+  position: relative;
+  z-index: 1;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 40%),
+    #0f1524;
+  border: 1px solid var(--color-border);
+  backdrop-filter: blur(12px);
+}
+
+.glass-hover {
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.glass-hover:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: 0 0 0 1px rgba(45, 226, 230, 0.08), 0 8px 40px rgba(0, 0, 0, 0.35);
+}
+
+.neon-text {
+  background: linear-gradient(90deg, #2de2e6, #8b5cf6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
