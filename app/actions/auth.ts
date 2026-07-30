@@ -45,9 +45,9 @@ export async function signIn(
 }
 
 export async function signUp(
-  _prev: { error?: string; ok?: boolean } | undefined,
+  _prev: { error?: string; ok?: boolean; firstAdmin?: boolean } | undefined,
   formData: FormData,
-): Promise<{ error?: string; ok?: boolean }> {
+): Promise<{ error?: string; ok?: boolean; firstAdmin?: boolean }> {
   const username = String(formData.get("username") ?? "")
     .trim()
     .toLowerCase()
@@ -78,9 +78,22 @@ export async function signUp(
   }
 
   if (data.user) {
-    await admin
+    // O primeiro usuário do sistema vira admin aprovado automaticamente.
+    const { count } = await admin
       .from("profiles")
-      .upsert({ id: data.user.id, username, role: "member", approved: false }, { onConflict: "id" })
+      .select("id", { count: "exact", head: true })
+    const isFirst = (count ?? 0) === 0
+
+    await admin.from("profiles").upsert(
+      {
+        id: data.user.id,
+        username,
+        role: isFirst ? "admin" : "member",
+        approved: isFirst,
+      },
+      { onConflict: "id" },
+    )
+    return { ok: true, firstAdmin: isFirst }
   }
   return { ok: true }
 }
