@@ -25,6 +25,7 @@ type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?:
 const overview: Item[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
+  { href: "/amigos", label: "Amigos", icon: Users },
 ]
 const global: Item[] = [
   { href: "/caixa", label: "Caixa", icon: Wallet },

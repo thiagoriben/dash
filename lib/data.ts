@@ -329,3 +329,125 @@ export async function getBankAccounts(profile: Profile | null): Promise<BankAcco
     .order("created_at")
   return (data ?? []) as BankAccount[]
 }
+
+/* ============================ SOCIAL ============================ */
+
+export type Friendship = {
+  id: string
+  requester_id: string
+  addressee_id: string
+  status: "pending" | "accepted"
+  created_at: string
+}
+export type FriendView = { friendshipId: string; profile: Profile; status: "pending" | "accepted"; incoming: boolean }
+export type JoinRequestView = {
+  id: string
+  project_id: string
+  user_id: string
+  status: string
+  message: string | null
+  created_at: string
+  profile: Profile | null
+  projectName?: string
+}
+
+/** Amigos + pedidos pendentes do usuário logado. */
+export async function getFriends(meId: string): Promise<{
+  friends: FriendView[]
+  incoming: FriendView[]
+  outgoing: FriendView[]
+}> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("friendships")
+    .select("*")
+    .or(`requester_id.eq.${meId},addressee_id.eq.${meId}`)
+    .order("created_at", { ascending: false })
+  const rows = (data ?? []) as Friendship[]
+
+  const otherIds = rows.map((r) => (r.requester_id === meId ? r.addressee_id : r.requester_id))
+  const profileMap = new Map<string, Profile>()
+  if (otherIds.length > 0) {
+    const { data: profs } = await supabase.from("profiles").select("*").in("id", otherIds)
+    for (const p of (profs ?? []) as Profile[]) profileMap.set(p.id, p)
+  }
+
+  const friends: FriendView[] = []
+  const incoming: FriendView[] = []
+  const outgoing: FriendView[] = []
+  for (const r of rows) {
+    const otherId = r.requester_id === meId ? r.addressee_id : r.requester_id
+    const profile = profileMap.get(otherId)
+    if (!profile) continue
+    const view: FriendView = {
+      friendshipId: r.id,
+      profile,
+      status: r.status,
+      incoming: r.addressee_id === meId,
+    }
+    if (r.status === "accepted") friends.push(view)
+    else if (view.incoming) incoming.push(view)
+    else outgoing.push(view)
+  }
+  return { friends, incoming, outgoing }
+}
+
+/** Pedidos que o usuário enviou para entrar em projetos. */
+export async function getMyJoinRequests(meId: string): Promise<JoinRequestView[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("project_join_requests")
+    .select("*, projects(name)")
+    .eq("user_id", meId)
+    .order("created_at", { ascending: false })
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    project_id: r.project_id,
+    user_id: r.user_id,
+    status: r.status,
+    message: r.message,
+    created_at: r.created_at,
+    profile: null,
+    projectName: r.projects?.name,
+  }))
+}
+
+export type ChatMessage = {
+  id: string
+  project_id: string
+  sender_id: string
+  body: string
+  created_at: string
+}
+
+/** Últimas mensagens do chat do projeto (ordem cronológica). */
+export async function getChatMessages(projectId: string): Promise<ChatMessage[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("chat_messages")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(100)
+  return ((data ?? []) as ChatMessage[]).reverse()
+}
+
+/** Pedidos de entrada pendentes num projeto (para o dono aprovar). */
+export async function getProjectJoinRequests(projectId: string): Promise<JoinRequestView[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("project_join_requests")
+    .select("*, profiles(*)")
+    .eq("project_id", projectId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    project_id: r.project_id,
+    user_id: r.user_id,
+    status: r.status,
+    message: r.message,
+    created_at: r.created_at,
+    profile: r.profiles ?? null,
+  }))
+}

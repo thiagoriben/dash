@@ -37,9 +37,10 @@ import { TabAdAccounts } from "./tab-ad-accounts"
 import { TabHistory } from "./tab-history"
 import { EditProjectModal } from "./edit-project-modal"
 import { CaixaClient } from "@/components/caixa-client"
-import type { ProjectMemberWithProfile } from "@/lib/data"
+import { TabChat } from "./tab-chat"
+import type { ProjectMemberWithProfile, JoinRequestView } from "@/lib/data"
 
-const TABS = [
+const BASE_TABS = [
   "Visão geral",
   "Caixa",
   "Vendas",
@@ -53,9 +54,10 @@ const TABS = [
   "DRE",
   "Repartição",
   "Colaboradores",
+  "Chat",
   "Histórico",
 ] as const
-type Tab = (typeof TABS)[number]
+type Tab = (typeof BASE_TABS)[number]
 
 export function ProjectDetail(props: {
   project: Project
@@ -81,9 +83,13 @@ export function ProjectDetail(props: {
   banks: BankAccount[]
   currencies: string[]
   meId: string
+  joinRequests: JoinRequestView[]
 }) {
   const { project } = props
   const canManage = props.isOwner || props.isAdmin
+  const isMember = props.members.some((m) => m.user_id === props.meId)
+  const isPartner = props.isOwner || props.isAdmin || isMember
+  const TABS = BASE_TABS.filter((t) => (t === "Chat" ? isPartner : true))
   const [tab, setTab] = useState<Tab>("Visão geral")
   const [editing, setEditing] = useState(false)
 
@@ -233,7 +239,11 @@ export function ProjectDetail(props: {
             members={props.members}
             owner={props.owner}
             isOwner={props.isOwner}
+            joinRequests={props.joinRequests}
           />
+        )}
+        {tab === "Chat" && isPartner && (
+          <TabChat projectId={project.id} meId={props.meId} profiles={props.profiles} />
         )}
         {tab === "Histórico" && <TabHistory activity={props.activity} />}
       </div>

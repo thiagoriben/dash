@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { Profile, Project } from "@/lib/types"
-import type { ProjectMemberWithProfile } from "@/lib/data"
+import type { ProjectMemberWithProfile, JoinRequestView } from "@/lib/data"
 import {
   Card,
   CardContent,
@@ -20,23 +20,40 @@ import {
 } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { addProjectMember, removeProjectMember } from "@/app/actions/projects"
-import { Plus, Trash2, Crown, Users } from "lucide-react"
+import { respondJoinRequest } from "@/app/actions/social"
+import { Plus, Trash2, Crown, Users, Copy, Check, UserCheck, Inbox } from "lucide-react"
 
 export function TabMembers({
   project,
   members,
   owner,
   isOwner,
+  joinRequests = [],
 }: {
   project: Project
   members: ProjectMemberWithProfile[]
   owner: Profile | null
   isOwner: boolean
+  joinRequests?: JoinRequestView[]
 }) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string>()
+  const [copied, setCopied] = useState(false)
   const router = useRouter()
+
+  function copyId() {
+    navigator.clipboard?.writeText(project.id)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  function resolveJoin(id: string, accept: boolean) {
+    startTransition(async () => {
+      await respondJoinRequest(id, accept)
+      router.refresh()
+    })
+  }
 
   function onSubmit(formData: FormData) {
     setError(undefined)
@@ -65,6 +82,53 @@ export function TabMembers({
           </Button>
         ) : null}
       </div>
+
+      {/* ID do projeto para convidar por entrada */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-muted">ID do projeto (compartilhe para receberem pedido de entrada)</p>
+            <p className="truncate font-mono text-sm">{project.id}</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={copyId}>
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? "Copiado" : "Copiar ID"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Pedidos de entrada pendentes (só dono aprova) */}
+      {isOwner && joinRequests.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Inbox size={16} className="text-warning" />
+              Pedidos de entrada
+              <Badge tone="warning">{joinRequests.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {joinRequests.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-border)] p-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {r.profile?.full_name || r.profile?.username || r.user_id}
+                  </p>
+                  {r.message ? <p className="truncate text-xs text-muted">{r.message}</p> : null}
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => resolveJoin(r.id, true)} disabled={pending}>
+                    <UserCheck size={14} /> Aceitar
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => resolveJoin(r.id, false)} disabled={pending}>
+                    Recusar
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
