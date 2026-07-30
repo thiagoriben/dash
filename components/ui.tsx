@@ -161,6 +161,17 @@ export function Badge({
   )
 }
 
+/* ---------- Skeleton ---------- */
+export function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("animate-pulse rounded-lg bg-white/5", className)}
+      aria-hidden="true"
+      {...props}
+    />
+  )
+}
+
 /* ---------- Table ---------- */
 export function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
   return (
