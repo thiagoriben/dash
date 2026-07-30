@@ -26,7 +26,7 @@ import {
   deleteCardCharge,
   createExpense,
 } from "@/app/actions/projects"
-import { CURRENCIES } from "@/lib/currency"
+import { DEFAULT_CURRENCIES } from "@/lib/currency"
 import { Plus, Wallet, CreditCard, Receipt, TrendingDown } from "lucide-react"
 
 export function TabAdAccounts({
@@ -44,6 +44,7 @@ export function TabAdAccounts({
 }) {
   const [accOpen, setAccOpen] = useState(false)
   const [chargeOpen, setChargeOpen] = useState(false)
+  const [expenseOpen, setExpenseOpen] = useState(false)
   const [editingAcc, setEditingAcc] = useState<AdAccount | null>(null)
   const [error, setError] = useState<string>()
   const [pending, startTransition] = useTransition()
@@ -78,6 +79,18 @@ export function TabAdAccounts({
     })
   }
 
+  function submitExpense(formData: FormData) {
+    setError(undefined)
+    startTransition(async () => {
+      const res = await createExpense(project.id, formData)
+      if (res?.error) setError(res.error)
+      else {
+        setExpenseOpen(false)
+        router.refresh()
+      }
+    })
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -102,16 +115,28 @@ export function TabAdAccounts({
       {/* Contas */}
       <div className="flex items-center justify-between">
         <h3 className="font-medium">Contas / BMs</h3>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditingAcc(null)
-            setError(undefined)
-            setAccOpen(true)
-          }}
-        >
-          <Plus size={16} /> Nova conta
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setError(undefined)
+              setExpenseOpen(true)
+            }}
+          >
+            <TrendingDown size={16} /> Lançar gasto
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditingAcc(null)
+              setError(undefined)
+              setAccOpen(true)
+            }}
+          >
+            <Plus size={16} /> Nova conta
+          </Button>
+        </div>
       </div>
       <Card>
         <CardContent className="p-0">
@@ -270,6 +295,58 @@ export function TabAdAccounts({
             </Button>
             <Button type="submit" disabled={pending}>
               {pending ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal lançar gasto (vira despesa de anúncios) */}
+      <Modal open={expenseOpen} onClose={() => setExpenseOpen(false)} title="Lançar gasto com a conta">
+        <form action={submitExpense} className="flex flex-col gap-4">
+          <input type="hidden" name="type" value="ads" />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Valor gasto">
+              <Input name="amount" inputMode="decimal" placeholder="0,00" required />
+            </Field>
+            <Field label="Moeda">
+              <Select name="currency" defaultValue={String(project.currency).toLowerCase()}>
+                {DEFAULT_CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c.toUpperCase()}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Conta (opcional)">
+              <Select name="ad_account_id" defaultValue="">
+                <option value="">Sem conta</option>
+                {adAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.account_name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Data">
+              <Input
+                name="spent_at"
+                type="date"
+                defaultValue={new Date().toISOString().slice(0, 10)}
+              />
+            </Field>
+          </div>
+          <Field label="Descrição (opcional)">
+            <Input name="description" placeholder="Ex: gasto Meta Ads" />
+          </Field>
+          {error ? <p className="text-sm text-negative">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" type="button" onClick={() => setExpenseOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Salvando..." : "Lançar gasto"}
             </Button>
           </div>
         </form>
