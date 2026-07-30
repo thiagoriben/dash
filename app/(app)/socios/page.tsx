@@ -2,9 +2,9 @@ import { redirect } from "next/navigation"
 import { getCurrentProfile, getFriends, getMyJoinRequests } from "@/lib/data"
 import { AmigosClient } from "@/components/amigos-client"
 
-export const metadata = { title: "Amigos | Dash" }
+export const metadata = { title: "Sócios | Dash" }
 
-export default async function AmigosPage() {
+export default async function SociosPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect("/login")
 

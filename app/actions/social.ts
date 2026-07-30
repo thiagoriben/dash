@@ -39,7 +39,7 @@ export async function sendFriendRequest(formData: FormData) {
     // O outro já tinha te enviado: aceita direto.
     if (existing.addressee_id === me.id) {
       await supabase.from("friendships").update({ status: "accepted", updated_at: new Date().toISOString() }).eq("id", existing.id)
-      revalidatePath("/amigos")
+      revalidatePath("/socios")
       return { ok: true, accepted: true }
     }
     return { error: "Pedido já enviado." }
@@ -49,7 +49,7 @@ export async function sendFriendRequest(formData: FormData) {
     .from("friendships")
     .insert({ requester_id: me.id, addressee_id: target.id, status: "pending" })
   if (error) return { error: error.message }
-  revalidatePath("/amigos")
+  revalidatePath("/socios")
   return { ok: true }
 }
 
@@ -65,7 +65,7 @@ export async function respondFriendRequest(id: string, accept: boolean) {
     const { error } = await supabase.from("friendships").delete().eq("id", id)
     if (error) return { error: error.message }
   }
-  revalidatePath("/amigos")
+  revalidatePath("/socios")
   return { ok: true }
 }
 
@@ -73,7 +73,7 @@ export async function removeFriend(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from("friendships").delete().eq("id", id)
   if (error) return { error: error.message }
-  revalidatePath("/amigos")
+  revalidatePath("/socios")
   return { ok: true }
 }
 
@@ -114,7 +114,7 @@ export async function requestJoinProject(formData: FormData) {
   if (error) {
     return { error: error.code === "23505" ? "Você já pediu para entrar." : error.message }
   }
-  revalidatePath("/amigos")
+  revalidatePath("/socios")
   return { ok: true, projectName: project.name }
 }
 
@@ -159,6 +159,33 @@ export async function sendChatMessage(projectId: string, body: string) {
   const { error } = await supabase
     .from("chat_messages")
     .insert({ project_id: projectId, sender_id: me.id, body: text })
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+/** Mensagem direta (usuário a usuário). Só entre sócios (amizade aceita). */
+export async function sendDirectMessage(recipientId: string, body: string) {
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me) return { error: "Sessão expirada." }
+  const text = body.trim()
+  if (!text) return { error: "Mensagem vazia." }
+  if (recipientId === me.id) return { error: "Não dá pra conversar consigo mesmo." }
+
+  // Confirma que são sócios (amizade aceita).
+  const { data: friendship } = await supabase
+    .from("friendships")
+    .select("id")
+    .eq("status", "accepted")
+    .or(
+      `and(requester_id.eq.${me.id},addressee_id.eq.${recipientId}),and(requester_id.eq.${recipientId},addressee_id.eq.${me.id})`,
+    )
+    .maybeSingle()
+  if (!friendship) return { error: "Vocês precisam ser sócios para conversar." }
+
+  const { error } = await supabase
+    .from("direct_messages")
+    .insert({ sender_id: me.id, recipient_id: recipientId, body: text })
   if (error) return { error: error.message }
   return { ok: true }
 }

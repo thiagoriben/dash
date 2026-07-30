@@ -28,10 +28,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {accentStyle ? <style dangerouslySetInnerHTML={{ __html: accentStyle }} /> : null}
     <AppShell
       initialCollapsed={collapsed}
-      sidebar={<Sidebar profile={profile} pending={pending} />}
+      sidebar={<Sidebar profile={profile} pending={pending} usdBrl={usdBrl} />}
       topbar={
         <Suspense fallback={<div className="h-16 border-b border-[color:var(--color-border)]" />}>
-          <Topbar usdBrl={usdBrl} />
+          <Topbar />
         </Suspense>
       }
       mobileNav={<MobileNav profile={profile} />}

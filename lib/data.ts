@@ -451,3 +451,48 @@ export async function getProjectJoinRequests(projectId: string): Promise<JoinReq
     profile: r.profiles ?? null,
   }))
 }
+
+/* ============================ DM / PERFIL PÚBLICO ============================ */
+
+export type DirectMessage = {
+  id: string
+  sender_id: string
+  recipient_id: string
+  body: string
+  read: boolean
+  created_at: string
+}
+
+/** Sócios (amizades aceitas) como lista simples de perfis. */
+export async function getPartners(meId: string): Promise<Profile[]> {
+  const { friends } = await getFriends(meId)
+  return friends.map((f) => f.profile)
+}
+
+/** Perfil público por username (respeita is_public; dono sempre vê o próprio). */
+export async function getPublicProfileByUsername(username: string, meId: string): Promise<Profile | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("username", username.toLowerCase())
+    .maybeSingle()
+  const p = (data ?? null) as Profile | null
+  if (!p) return null
+  if (!p.is_public && p.id !== meId) return null
+  return p
+}
+
+/** Mensagens diretas entre o usuário logado e outro (ordem cronológica). */
+export async function getDirectMessages(meId: string, otherId: string): Promise<DirectMessage[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("direct_messages")
+    .select("*")
+    .or(
+      `and(sender_id.eq.${meId},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${meId})`,
+    )
+    .order("created_at", { ascending: true })
+    .limit(200)
+  return (data ?? []) as DirectMessage[]
+}

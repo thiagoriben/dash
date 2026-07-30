@@ -9,11 +9,11 @@ import { Coins, RefreshCw, Check } from "lucide-react"
 
 export function CurrencyPopover({
   usdBrl,
-  currencies,
+  currencies = ["USD", "EUR"],
   collapsed,
 }: {
   usdBrl: number
-  currencies: string[]
+  currencies?: string[]
   collapsed: boolean
 }) {
   const router = useRouter()

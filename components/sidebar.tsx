@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils"
 import type { Profile } from "@/lib/types"
 import { useSidebar } from "@/components/app-shell"
 import { ApprovalsButton } from "@/components/approvals-button"
+import { CurrencyPopover } from "@/components/currency-popover"
+import { signOut } from "@/app/actions/auth"
 import {
   LayoutDashboard,
   FolderKanban,
@@ -17,6 +19,8 @@ import {
   Zap,
   PanelLeftClose,
   PanelLeftOpen,
+  LogOut,
+  MessageSquare,
 } from "lucide-react"
 
 type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }
@@ -25,7 +29,8 @@ type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?:
 const overview: Item[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
-  { href: "/amigos", label: "Amigos", icon: Users },
+  { href: "/socios", label: "Sócios", icon: Users },
+  { href: "/chat", label: "Chat", icon: MessageSquare },
 ]
 const global: Item[] = [
   { href: "/caixa", label: "Caixa", icon: Wallet },
@@ -35,9 +40,11 @@ const global: Item[] = [
 export function Sidebar({
   profile,
   pending = [],
+  usdBrl = 5,
 }: {
   profile: Profile | null
   pending?: Profile[]
+  usdBrl?: number
 }) {
   const pathname = usePathname()
   const { collapsed, toggle } = useSidebar()
@@ -71,22 +78,48 @@ export function Sidebar({
         <NavGroup items={[...admin, ...config]} pathname={pathname} collapsed={collapsed} />
       </nav>
 
-      <div className="border-t border-[color:var(--color-border)] p-3">
-        {isAdmin && (
-          <div className="mb-2">
-            <ApprovalsButton pending={pending} collapsed={collapsed} />
-          </div>
-        )}
+      <div className="flex flex-col gap-2 border-t border-[color:var(--color-border)] p-3">
+        {isAdmin && <ApprovalsButton pending={pending} collapsed={collapsed} />}
+
+        <CurrencyPopover usdBrl={usdBrl} collapsed={collapsed} />
+
         <button
           onClick={toggle}
           aria-label={collapsed ? "Expandir barra lateral" : "Recolher barra lateral"}
-          className="mb-2 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-foreground"
+          title={collapsed ? "Expandir" : "Recolher"}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-foreground",
+            collapsed ? "justify-center px-0" : "justify-start",
+          )}
         >
           {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           {!collapsed && "Recolher"}
         </button>
-        <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary/15 font-mono text-sm font-semibold text-secondary">
+
+        <form action={signOut}>
+          <button
+            type="submit"
+            aria-label="Sair"
+            title="Sair"
+            className={cn(
+              "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-danger/10 hover:text-danger",
+              collapsed ? "justify-center px-0" : "justify-start",
+            )}
+          >
+            <LogOut size={18} />
+            {!collapsed && "Sair"}
+          </button>
+        </form>
+
+        <Link
+          href="/perfil"
+          title="Meu perfil"
+          className={cn(
+            "mt-1 flex items-center gap-3 rounded-xl p-1 transition-colors hover:bg-white/5",
+            collapsed && "justify-center",
+          )}
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 font-mono text-sm font-semibold text-primary">
             {(profile?.username ?? "?").slice(0, 2).toUpperCase()}
           </div>
           {!collapsed && (
@@ -97,7 +130,7 @@ export function Sidebar({
               <div className="text-xs capitalize text-muted">{profile?.role ?? "member"}</div>
             </div>
           )}
-        </div>
+        </Link>
       </div>
     </aside>
   )

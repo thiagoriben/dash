@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import type { FriendView, JoinRequestView } from "@/lib/data"
 import { Card, CardContent, CardHeader, CardTitle, Button, Field, Input, Badge } from "@/components/ui"
 import {
@@ -12,6 +13,8 @@ import {
   Clock,
   FolderInput,
   Trash2,
+  MessageSquare,
+  UserCircle,
 } from "lucide-react"
 import {
   sendFriendRequest,
@@ -49,7 +52,7 @@ export function AmigosClient({
       const res = await sendFriendRequest(formData)
       if (res?.error) setFriendError(res.error)
       else {
-        setFriendMsg(res.accepted ? "Pedido aceito — vocês já são amigos!" : "Pedido enviado.")
+        setFriendMsg(res.accepted ? "Pedido aceito — vocês já são sócios!" : "Pedido enviado.")
         router.refresh()
       }
     })
@@ -85,9 +88,9 @@ export function AmigosClient({
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="font-display text-2xl font-semibold">Amigos & Sociedades</h1>
+        <h1 className="font-display text-2xl font-semibold">Sócios & Sociedades</h1>
         <p className="text-sm text-muted">
-          Faça amizade por nome de usuário ou peça para entrar num projeto usando o ID dele.
+          Convide sócios por nome de usuário (o pedido precisa ser aceito) ou peça para entrar num projeto com o ID dele.
         </p>
       </header>
 
@@ -96,7 +99,7 @@ export function AmigosClient({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <UserPlus size={16} className="text-primary" /> Adicionar amigo
+              <UserPlus size={16} className="text-primary" /> Convidar sócio
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -161,29 +164,45 @@ export function AmigosClient({
         </Card>
       )}
 
-      {/* Amigos */}
+      {/* Sócios */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users size={16} className="text-primary" /> Seus amigos
+            <Users size={16} className="text-primary" /> Seus sócios
             <span className="text-sm font-normal text-muted">({friends.length})</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {friends.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">Você ainda não tem amigos adicionados.</p>
+            <p className="py-6 text-center text-sm text-muted">Você ainda não tem sócios. Convide alguém pelo usuário.</p>
           ) : (
             friends.map((f) => (
               <div key={f.friendshipId} className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-border)] p-3">
                 <PersonRow name={f.profile.full_name || f.profile.username} sub={`@${f.profile.username}`} />
-                <button
-                  onClick={() => unfriend(f.friendshipId)}
-                  className="text-muted transition-colors hover:text-negative"
-                  aria-label="Remover amigo"
-                  disabled={pending}
-                >
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <Link
+                    href={`/chat?u=${f.profile.id}`}
+                    className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2.5 py-1.5 text-xs text-muted transition-colors hover:text-foreground"
+                  >
+                    <MessageSquare size={14} /> Conversar
+                  </Link>
+                  {f.profile.is_public && (
+                    <Link
+                      href={`/u/${f.profile.username}`}
+                      className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2.5 py-1.5 text-xs text-muted transition-colors hover:text-foreground"
+                    >
+                      <UserCircle size={14} /> Perfil
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => unfriend(f.friendshipId)}
+                    className="ml-1 text-muted transition-colors hover:text-negative"
+                    aria-label="Desfazer sociedade"
+                    disabled={pending}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -202,7 +221,7 @@ export function AmigosClient({
             {outgoing.map((f) => (
               <div key={f.friendshipId} className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-border)] p-3">
                 <PersonRow name={f.profile.full_name || f.profile.username} sub={`@${f.profile.username}`} />
-                <Badge tone="secondary">Amizade pendente</Badge>
+                <Badge tone="secondary">Sociedade pendente</Badge>
               </div>
             ))}
             {joinRequests.map((r) => (
