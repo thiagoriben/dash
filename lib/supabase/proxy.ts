@@ -4,9 +4,18 @@ import { NextResponse, type NextRequest } from "next/server"
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Sem as variáveis de ambiente do Supabase não é possível criar o client.
+  // Em vez de derrubar toda a aplicação, seguimos sem sessão para o preview continuar renderizando.
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return supabaseResponse
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       // Preview do v0 roda em iframe cross-origin: cookie precisa de SameSite=None; Secure.
       cookieOptions: { sameSite: "none", secure: true },
