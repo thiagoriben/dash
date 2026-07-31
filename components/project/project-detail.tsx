@@ -20,7 +20,7 @@ import type {
   Sale,
   CustomMetric,
 } from "@/lib/types"
-import { Badge, Button } from "@/components/ui"
+import { Badge, Button, Select } from "@/components/ui"
 import {
   ChevronLeft,
   Pencil,
@@ -170,52 +170,71 @@ export function ProjectDetail(props: {
         </div>
       </div>
 
-      <nav
-        aria-label="Seções do projeto"
-        className="flex flex-col gap-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)]/40 p-3 sm:flex-row sm:flex-wrap sm:items-stretch sm:gap-4"
-      >
-        {TAB_GROUPS.map((group, gi) => {
-          const groupTabs = group.tabs.filter((t) => TABS.includes(t))
-          if (groupTabs.length === 0) return null
-          return (
-            <div
-              key={group.label}
-              className={cn(
-                "flex flex-col gap-1.5",
-                gi > 0 && "sm:border-l sm:border-[color:var(--color-border)] sm:pl-4",
-              )}
+      {/* Layout com sidebar interna do projeto (vertical no desktop) */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+        <nav
+          aria-label="Seções do projeto"
+          className="flex shrink-0 flex-col gap-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)]/40 p-3 lg:sticky lg:top-4 lg:w-56"
+        >
+          {/* Mobile: seletor compacto; Desktop: navegação vertical agrupada */}
+          <div className="lg:hidden">
+            <Select
+              aria-label="Seção do projeto"
+              value={tab}
+              onChange={(e) => setTab(e.target.value as Tab)}
             >
-              <span className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted/70">
-                {group.label}
-              </span>
-              <div className="flex flex-wrap gap-1">
-                {groupTabs.map((t) => {
-                  const Icon = TAB_ICONS[t]
-                  const active = tab === t
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => setTab(t)}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors",
-                        active
-                          ? "bg-primary/15 text-primary shadow-[0_0_0_1px_rgba(41,245,126,0.3)]"
-                          : "text-muted hover:bg-white/5 hover:text-foreground",
-                      )}
-                    >
-                      <Icon size={15} className={active ? "text-primary" : ""} />
-                      {t}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
-      </nav>
+              {TAB_GROUPS.map((group) => {
+                const groupTabs = group.tabs.filter((t) => TABS.includes(t))
+                if (groupTabs.length === 0) return null
+                return (
+                  <optgroup key={group.label} label={group.label}>
+                    {groupTabs.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </optgroup>
+                )
+              })}
+            </Select>
+          </div>
 
-      <div>
+          <div className="hidden flex-col gap-3 lg:flex">
+            {TAB_GROUPS.map((group) => {
+              const groupTabs = group.tabs.filter((t) => TABS.includes(t))
+              if (groupTabs.length === 0) return null
+              return (
+                <div key={group.label} className="flex flex-col gap-1">
+                  <span className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted/70">
+                    {group.label}
+                  </span>
+                  {groupTabs.map((t) => {
+                    const Icon = TAB_ICONS[t]
+                    const active = tab === t
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => setTab(t)}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+                          active
+                            ? "bg-primary/15 text-primary shadow-[0_0_0_1px_rgba(41,245,126,0.3)]"
+                            : "text-muted hover:bg-white/5 hover:text-foreground",
+                        )}
+                      >
+                        <Icon size={16} className={active ? "text-primary" : ""} />
+                        {t}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        </nav>
+
+        <div className="min-w-0 flex-1">
         {tab === "Visão geral" && (
           <TabOverview
             project={project}
@@ -322,6 +341,7 @@ export function ProjectDetail(props: {
           <TabChat projectId={project.id} meId={props.meId} profiles={props.profiles} />
         )}
         {tab === "Histórico" && <TabHistory activity={props.activity} />}
+        </div>
       </div>
 
       {editing && (

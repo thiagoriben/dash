@@ -23,6 +23,7 @@ export type Project = {
   visibility: "privado" | "publico" | "restrito"
   owner_id: string | null
   tax_pct: number
+  card_color: string | null
   created_at: string
 }
 
@@ -152,8 +153,25 @@ export type PaymentGateway = {
   name: string
   fee_pct: number
   fee_fixed: number
+  withdraw_fee_pct: number
   term_days_pix: number
   term_days_card: number
+  created_at: string
+}
+
+export type GatewayWithdrawal = {
+  id: string
+  owner_id: string
+  gateway_id: string
+  gross_amount: number
+  fee_amount: number
+  net_amount: number
+  currency: string
+  dest_kind: "carteira" | "projeto"
+  dest_account_id: string | null
+  dest_project_id: string | null
+  note: string | null
+  withdrawn_at: string
   created_at: string
 }
 

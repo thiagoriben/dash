@@ -10,6 +10,8 @@ import { SelectOrOther } from "@/components/select-or-other"
 import { DEFAULT_CURRENCIES, DEFAULT_OFFER_TYPES, DEFAULT_REGIONS } from "@/lib/currency"
 import { Trash2 } from "lucide-react"
 
+const CARD_COLORS = ["#29f57e", "#2de2e6", "#f59e0b", "#ef4444", "#3b82f6", "#e879f9"]
+
 export function EditProjectModal({
   project,
   prefs,
@@ -24,6 +26,7 @@ export function EditProjectModal({
   const [open, setOpen] = useState(true)
   const [error, setError] = useState<string>()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [cardColor, setCardColor] = useState(project.card_color ?? "")
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -106,6 +109,38 @@ export function EditProjectModal({
               </Select>
             </Field>
           </div>
+          <Field label="Cor do card (opcional)">
+            <div className="flex flex-wrap items-center gap-2">
+              {CARD_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCardColor(c)}
+                  aria-label={`Cor ${c}`}
+                  aria-pressed={cardColor === c}
+                  className="h-7 w-7 rounded-full border border-border transition-transform data-[on=true]:scale-110 data-[on=true]:ring-2 data-[on=true]:ring-offset-2 data-[on=true]:ring-offset-[color:var(--color-surface)]"
+                  data-on={cardColor === c}
+                  style={{ backgroundColor: c, ...(cardColor === c ? { boxShadow: `0 0 0 2px ${c}` } : {}) }}
+                />
+              ))}
+              <input
+                type="color"
+                value={cardColor || "#29f57e"}
+                onChange={(e) => setCardColor(e.target.value)}
+                aria-label="Cor personalizada"
+                className="h-7 w-9 cursor-pointer rounded border border-border bg-transparent"
+              />
+              <button
+                type="button"
+                onClick={() => setCardColor("")}
+                className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-white/5 hover:text-foreground"
+              >
+                Nenhuma
+              </button>
+            </div>
+            <input type="hidden" name="card_color" value={cardColor} />
+          </Field>
+
           {error ? <p className="text-sm text-negative">{error}</p> : null}
           <div className="flex items-center justify-between gap-2">
             {canDelete ? (

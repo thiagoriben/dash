@@ -143,9 +143,23 @@ export function ProjectsClient({
             const Vis = visIcon[p.visibility]
             return (
               <Link key={p.id} href={`/projetos/${p.id}`} prefetch>
-                <Card className="group h-full p-5">
+                <Card
+                  className="group h-full overflow-hidden p-5"
+                  style={
+                    p.card_color
+                      ? { borderLeft: `3px solid ${p.card_color}` }
+                      : undefined
+                  }
+                >
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary">
+                    <h3 className="flex items-center gap-2 font-display text-base font-semibold text-foreground group-hover:text-primary">
+                      {p.card_color ? (
+                        <span
+                          aria-hidden="true"
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: p.card_color }}
+                        />
+                      ) : null}
                       {p.name}
                     </h3>
                     <ArrowUpRight

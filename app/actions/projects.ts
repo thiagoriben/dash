@@ -102,6 +102,7 @@ export async function updateProject(id: string, formData: FormData) {
     visibility: String(formData.get("visibility") ?? "privado"),
   }
   if (formData.has("tax_pct")) patch.tax_pct = num(formData.get("tax_pct"))
+  if (formData.has("card_color")) patch.card_color = String(formData.get("card_color") ?? "") || null
   const { error } = await supabase.from("projects").update(patch).eq("id", id)
   if (error) return { error: error.message }
   await logActivity({
@@ -442,6 +443,7 @@ export async function saveGateway(formData: FormData) {
     name,
     fee_pct: num(formData.get("fee_pct")),
     fee_fixed: num(formData.get("fee_fixed")),
+    withdraw_fee_pct: num(formData.get("withdraw_fee_pct")),
     term_days_pix: int(formData.get("term_days_pix")),
     term_days_card: int(formData.get("term_days_card")),
   }
@@ -459,6 +461,100 @@ export async function deleteGateway(id: string) {
   const supabase = await createClient()
   await supabase.from("payment_gateways").delete().eq("id", id)
   revalidatePath("/config/gateways")
+  return { ok: true }
+}
+
+/**
+ * Saque de um gateway. Recebe o valor BRUTO sacado; o líquido é
+ * bruto − (bruto × withdraw_fee_pct). Lança a entrada LÍQUIDA no destino
+ * (carteira pessoal = bank_account, ou caixa de projeto = cash_entry) e
+ * registra o saque para abater do saldo do gateway.
+ */
+export async function withdrawFromGateway(formData: FormData) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: "Não autenticado." }
+
+  const gatewayId = String(formData.get("gateway_id") ?? "")
+  const gross = num(formData.get("gross_amount"))
+  if (!gatewayId) return { error: "Gateway inválido." }
+  if (gross <= 0) return { error: "Informe o valor sacado." }
+
+  const { data: gw } = await supabase
+    .from("payment_gateways")
+    .select("id, withdraw_fee_pct")
+    .eq("id", gatewayId)
+    .maybeSingle()
+  if (!gw) return { error: "Gateway não encontrado." }
+
+  const feePct = Number(gw.withdraw_fee_pct) || 0
+  const fee = +(gross * (feePct / 100)).toFixed(2)
+  const net = +(gross - fee).toFixed(2)
+
+  const destKind = String(formData.get("dest_kind") ?? "carteira") === "projeto" ? "projeto" : "carteira"
+  const destAccountId = String(formData.get("dest_account_id") ?? "") || null
+  const destProjectId = String(formData.get("dest_project_id") ?? "") || null
+  const withdrawnAt = String(formData.get("withdrawn_at") ?? new Date().toISOString().slice(0, 10))
+  const note = String(formData.get("note") ?? "") || null
+
+  if (destKind === "carteira" && !destAccountId) return { error: "Escolha a conta de destino." }
+  if (destKind === "projeto" && !destProjectId) return { error: "Escolha o projeto de destino." }
+
+  const { error: wErr } = await supabase.from("gateway_withdrawals").insert({
+    owner_id: profile.id,
+    gateway_id: gatewayId,
+    gross_amount: gross,
+    fee_amount: fee,
+    net_amount: net,
+    currency: "BRL",
+    dest_kind: destKind,
+    dest_account_id: destKind === "carteira" ? destAccountId : null,
+    dest_project_id: destKind === "projeto" ? destProjectId : null,
+    note,
+    withdrawn_at: withdrawnAt,
+  })
+  if (wErr) return { error: wErr.message }
+
+  // Lança a entrada líquida no destino escolhido.
+  if (destKind === "carteira" && destAccountId) {
+    await supabase.from("cash_entries").insert({
+      owner_id: profile.id,
+      project_id: null,
+      direction: "entrada",
+      amount: net,
+      currency: "BRL",
+      category: "saque_gateway",
+      description: "Saque de gateway",
+      occurred_at: withdrawnAt,
+      bank_account_id: destAccountId,
+      created_by: profile.id,
+    })
+    await applyBankDelta(supabase, destAccountId, net)
+  } else if (destKind === "projeto" && destProjectId) {
+    await supabase.from("cash_entries").insert({
+      owner_id: profile.id,
+      project_id: destProjectId,
+      direction: "entrada",
+      amount: net,
+      currency: "BRL",
+      category: "saque_gateway",
+      description: "Saque de gateway",
+      occurred_at: withdrawnAt,
+      created_by: profile.id,
+    })
+  }
+
+  await logActivity({
+    actor: profile,
+    action: "create",
+    entity: "cash_entry",
+    projectId: destKind === "projeto" ? destProjectId ?? undefined : undefined,
+    summary: `Saque de gateway: bruto ${gross.toFixed(2)}, líquido ${net.toFixed(2)}`,
+  })
+
+  revalidatePath("/config/gateways")
+  revalidatePath("/caixa")
+  if (destProjectId) revalidatePath(`/projetos/${destProjectId}`)
   return { ok: true }
 }
 

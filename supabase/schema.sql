@@ -38,8 +38,10 @@ create table if not exists public.projects (
   visibility text default 'privado',      -- 'privado' | 'publico' | 'restrito'
   owner_id uuid references public.profiles(id) on delete set null,
   tax_pct numeric not null default 0,     -- imposto % aplicado nas vendas
+  card_color text,                        -- cor de destaque do card (hex, opcional)
   created_at timestamptz not null default now()
 );
+alter table public.projects add column if not exists card_color text;
 
 -- MEMBROS DO PROJETO (colaboradores)
 create table if not exists public.project_members (
@@ -601,6 +603,29 @@ create table if not exists public.direct_messages (
   created_at timestamptz not null default now()
 );
 
+-- GATEWAY: taxa de saque + saques (saldo = vendas líquidas − saques)
+alter table public.payment_gateways add column if not exists withdraw_fee_pct numeric not null default 0;
+
+create table if not exists public.gateway_withdrawals (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  gateway_id uuid not null references public.payment_gateways(id) on delete cascade,
+  gross_amount numeric not null default 0,
+  fee_amount numeric not null default 0,
+  net_amount numeric not null default 0,
+  currency text not null default 'BRL',
+  dest_kind text not null default 'carteira',           -- 'carteira' | 'projeto'
+  dest_account_id uuid references public.bank_accounts(id) on delete set null,
+  dest_project_id uuid references public.projects(id) on delete set null,
+  note text,
+  withdrawn_at date not null default current_date,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_gw_withdrawals_owner on public.gateway_withdrawals(owner_id);
+create index if not exists idx_gw_withdrawals_gateway on public.gateway_withdrawals(gateway_id);
+
+alter table public.gateway_withdrawals enable row level security;
+
 create index if not exists idx_custom_metrics_owner on public.custom_metrics(owner_id);
 create index if not exists idx_custom_metrics_project on public.custom_metrics(project_id);
 create index if not exists idx_shortcut_categories_owner on public.shortcut_categories(owner_id);
@@ -640,6 +665,11 @@ create policy notes_all on public.notes for all to authenticated
 create policy todo_items_all on public.todo_items for all to authenticated
   using (owner_id = auth.uid() or assignee_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()))
   with check (owner_id = auth.uid() or (project_id is not null and public.has_project_access(project_id, auth.uid())) or public.is_admin(auth.uid()));
+-- gateway_withdrawals (apenas dono ou admin)
+alter table public.gateway_withdrawals enable row level security;
+create policy gateway_withdrawals_all on public.gateway_withdrawals for all to authenticated
+  using (owner_id = auth.uid() or public.is_admin(auth.uid()))
+  with check (owner_id = auth.uid() or public.is_admin(auth.uid()));
 -- direct_messages (remetente ou destinatário)
 create policy dm_select on public.direct_messages for select
   to authenticated using (sender_id = auth.uid() or recipient_id = auth.uid() or public.is_admin(auth.uid()));
