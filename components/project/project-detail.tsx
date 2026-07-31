@@ -39,6 +39,7 @@ import {
   Users,
   MessageSquare,
   History,
+  LayoutGrid,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -58,7 +59,9 @@ import { TabHistory } from "./tab-history"
 import { EditProjectModal } from "./edit-project-modal"
 import { CaixaClient } from "@/components/caixa-client"
 import { TabChat } from "./tab-chat"
+import { OrganizacaoClient } from "@/components/organizacao-client"
 import type { ProjectMemberWithProfile, JoinRequestView } from "@/lib/data"
+import type { ShortcutCategory, Shortcut, Note, TodoItem } from "@/lib/types"
 
 const BASE_TABS = [
   "Visão geral",
@@ -75,6 +78,7 @@ const BASE_TABS = [
   "Repartição",
   "Colaboradores",
   "Chat",
+  "Organização",
   "Histórico",
 ] as const
 type Tab = (typeof BASE_TABS)[number]
@@ -94,6 +98,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   Repartição: PieChart,
   Colaboradores: Users,
   Chat: MessageSquare,
+  Organização: LayoutGrid,
   Histórico: History,
 }
 
@@ -101,7 +106,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
   { label: "Análise", tabs: ["Visão geral", "Funil", "DRE", "Histórico"] },
   { label: "Financeiro", tabs: ["Caixa", "Vendas", "Recebíveis", "Gastos", "Repartição"] },
-  { label: "Operação", tabs: ["Produtos", "Criativos", "Contas de anúncio", "Calculadora"] },
+  { label: "Operação", tabs: ["Produtos", "Criativos", "Contas de anúncio", "Calculadora", "Organização"] },
   { label: "Time", tabs: ["Colaboradores", "Chat"] },
 ]
 
@@ -131,6 +136,11 @@ export function ProjectDetail(props: {
   meId: string
   joinRequests: JoinRequestView[]
   customMetrics: CustomMetric[]
+  orgCategories: ShortcutCategory[]
+  orgShortcuts: Shortcut[]
+  orgNotes: Note[]
+  orgTodos: TodoItem[]
+  lastCurrency?: string
 }) {
   const { project } = props
   const canManage = props.isOwner || props.isAdmin
@@ -262,6 +272,7 @@ export function ProjectDetail(props: {
             usdBrl={props.usdBrl}
             currencies={props.currencies}
             lockedProjectId={project.id}
+            lastCurrency={props.lastCurrency}
           />
         )}
         {tab === "Vendas" && (
@@ -339,6 +350,17 @@ export function ProjectDetail(props: {
         )}
         {tab === "Chat" && isPartner && (
           <TabChat projectId={project.id} meId={props.meId} profiles={props.profiles} />
+        )}
+        {tab === "Organização" && (
+          <OrganizacaoClient
+            projectId={project.id}
+            categories={props.orgCategories}
+            shortcuts={props.orgShortcuts}
+            notes={props.orgNotes}
+            todos={props.orgTodos}
+            members={props.members.map((m) => m.profile).filter(Boolean) as Profile[]}
+            embedded
+          />
         )}
         {tab === "Histórico" && <TabHistory activity={props.activity} />}
         </div>

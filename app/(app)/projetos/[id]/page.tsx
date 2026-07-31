@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation"
+import { cookies } from "next/headers"
 import {
   getCurrentProfile,
   getProject,
@@ -18,6 +19,10 @@ import {
   getBankAccounts,
   getProjectJoinRequests,
   getCustomMetrics,
+  getShortcutCategories,
+  getShortcuts,
+  getNotes,
+  getTodos,
   resolveRange,
   type Period,
 } from "@/lib/data"
@@ -63,6 +68,10 @@ export default async function ProjectPage({
     banks,
     joinRequests,
     customMetrics,
+    orgCategories,
+    orgShortcuts,
+    orgNotes,
+    orgTodos,
   ] = await Promise.all([
     getExpenses([id], from, to),
     getDailyMetrics([id], from, to),
@@ -81,12 +90,17 @@ export default async function ProjectPage({
     getBankAccounts(profile),
     getProjectJoinRequests(id),
     getCustomMetrics(profile.id, id),
+    getShortcutCategories(profile.id, id),
+    getShortcuts(profile.id, id),
+    getNotes(profile.id, id),
+    getTodos(profile.id, id),
   ])
   const currencies = profile.prefs?.currencies ?? DEFAULT_CURRENCIES
 
   const owner = profiles.find((p) => p.id === project.owner_id) ?? null
   const isOwner = project.owner_id === profile.id
   const isAdmin = profile.role === "admin"
+  const lastCurrency = (await cookies()).get("last_cash_currency")?.value
 
   return (
     <ProjectDetail
@@ -115,6 +129,11 @@ export default async function ProjectPage({
       meId={profile.id}
       joinRequests={joinRequests}
       customMetrics={customMetrics}
+      orgCategories={orgCategories}
+      orgShortcuts={orgShortcuts}
+      orgNotes={orgNotes}
+      orgTodos={orgTodos}
+      lastCurrency={lastCurrency}
     />
   )
 }

@@ -262,9 +262,16 @@ export type CashEntry = {
   /** Se a saída/entrada deve refletir na dashboard como gasto/faturamento. */
   to_dashboard: boolean
   dashboard_kind: "gasto" | "faturamento" | null
+  /** Tipo do lançamento: comum, aporte via pix (fundos), gasto com anúncio ou cobrança no cartão. */
+  entry_type: CashEntryType
+  /** Vincula um gasto_anuncio à sua cobranca_cartao (e vice-versa) para calcular o imposto Meta. */
+  linked_entry_id: string | null
   created_by: string | null
   created_at: string
 }
+
+/** Tipo de um lançamento do caixa. */
+export type CashEntryType = "comum" | "aporte_pix" | "gasto_anuncio" | "cobranca_cartao"
 
 /** Conta bancária/carteira do gestor financeiro pessoal. */
 export type BankAccount = {

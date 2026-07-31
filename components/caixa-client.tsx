@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 
 const today = () => new Date().toISOString().slice(0, 10)
+const num = (v: string) => Number.parseFloat(String(v ?? "0").replace(",", ".")) || 0
 type Scope = "pessoal" | "projeto"
 type PeriodKey = "hoje" | "7d" | "30d" | "90d" | "mesatual" | "tudo"
 
@@ -61,6 +62,7 @@ export function CaixaClient({
   usdBrl,
   currencies,
   lockedProjectId,
+  lastCurrency,
 }: {
   entries: CashEntry[]
   projects: Project[]
@@ -71,6 +73,8 @@ export function CaixaClient({
   currencies: string[]
   /** Quando definido, o caixa fica travado neste projeto (uso embutido na aba do projeto). */
   lockedProjectId?: string
+  /** Última moeda usada pelo usuário (memória do formulário). */
+  lastCurrency?: string
 }) {
   const locked = Boolean(lockedProjectId)
   const [scopeState, setScope] = useState<Scope>(locked ? "projeto" : "pessoal")
@@ -82,6 +86,10 @@ export function CaixaClient({
   const [customTo, setCustomTo] = useState("")
   const [entryOpen, setEntryOpen] = useState(false)
   const [direction, setDirection] = useState<"entrada" | "saida">("entrada")
+  // Tipo da saída e vínculo (gasto de anúncio <-> cobrança no cartão) para o imposto Meta.
+  const [entryType, setEntryType] = useState<CashEntry["entry_type"]>("comum")
+  const [linkedId, setLinkedId] = useState<string>("")
+  const [entryCurrency, setEntryCurrency] = useState<string>(lastCurrency ?? currencies[0] ?? "BRL")
   const [prefill, setPrefill] = useState<{
     amount?: string
     description?: string
@@ -146,9 +154,27 @@ export function CaixaClient({
     setDirection(dir)
     setError(undefined)
     setPrefill({})
+    setEntryType("comum")
+    setLinkedId("")
+    setEntryCurrency(lastCurrency ?? currencies[0] ?? "BRL")
     setFormKey((k) => k + 1)
     setEntryOpen(true)
   }
+
+  // Candidatos a vínculo: lançamentos do MESMO projeto, do TIPO OPOSTO e ainda sem par.
+  // gasto_anuncio combina com cobranca_cartao (e vice-versa) para calcular o imposto Meta.
+  const linkTargets = useMemo(() => {
+    if (scope !== "projeto") return []
+    const want = entryType === "gasto_anuncio" ? "cobranca_cartao" : entryType === "cobranca_cartao" ? "gasto_anuncio" : null
+    if (!want) return []
+    return entries
+      .filter((c) => c.project_id === projectId && c.entry_type === want && !c.linked_entry_id)
+      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+  }, [entries, entryType, scope, projectId])
+
+  // Imposto Meta estimado = |cobrança − gasto| do par selecionado.
+  const linkedTarget = linkTargets.find((c) => c.id === linkedId) ?? null
+  const linkAmountBRL = linkedTarget ? toBRL(linkedTarget.amount, linkedTarget.currency, usdBrl) : 0
 
   // Lançamentos recentes do mesmo escopo/direção — clique preenche o formulário.
   const recent = useMemo(() => {
@@ -459,12 +485,36 @@ export function CaixaClient({
         >
           <input type="hidden" name="direction" value={direction} />
           <input type="hidden" name="project_id" value={scope === "projeto" ? projectId : ""} />
+          <input type="hidden" name="entry_type" value={entryType} />
+          <input type="hidden" name="linked_entry_id" value={entryType === "gasto_anuncio" || entryType === "cobranca_cartao" ? linkedId : ""} />
+
+          {/* Tipo do lançamento — só em saída de projeto (fundos/pix, gasto de anúncio, cobrança no cartão). */}
+          {direction === "saida" && scope === "projeto" && (
+            <Field
+              label="Tipo da saída"
+              hint="Fundos/pix é aporte de verba. Gasto com anúncio entra na dashboard. Cobrança no cartão pode ser vinculada ao gasto para calcular o imposto da Meta."
+            >
+              <Select
+                value={entryType}
+                onChange={(e) => {
+                  setEntryType(e.target.value as CashEntry["entry_type"])
+                  setLinkedId("")
+                }}
+              >
+                <option value="comum">Comum</option>
+                <option value="aporte_pix">Aporte de fundos (pix)</option>
+                <option value="gasto_anuncio">Gasto com anúncio</option>
+                <option value="cobranca_cartao">Cobrança no cartão</option>
+              </Select>
+            </Field>
+          )}
+
           <div className="grid grid-cols-3 gap-3">
             <Field label="Valor">
               <Input name="amount" inputMode="decimal" placeholder="0,00" defaultValue={prefill.amount ?? ""} required />
             </Field>
             <Field label="Moeda">
-              <Select name="currency" defaultValue={prefill.currency ?? currencies[0] ?? "brl"}>
+              <Select name="currency" value={entryCurrency} onChange={(e) => setEntryCurrency(e.target.value)}>
                 {currencies.map((c) => (
                   <option key={c} value={c}>{normalizeCurrency(c)}</option>
                 ))}
@@ -490,18 +540,57 @@ export function CaixaClient({
               </Select>
             </Field>
           </div>
-          {/* Opt-in para dashboard */}
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="to_dashboard" className="h-4 w-4 rounded border-[color:var(--color-border)]" />
-            Refletir na dashboard como {direction === "saida" ? "gasto/faturamento" : "faturamento"}
-          </label>
-          {direction === "saida" && (
-            <Field label="Como refletir (se marcado acima)">
-              <Select name="dashboard_kind" defaultValue="gasto">
-                <option value="gasto">Gasto</option>
-                <option value="faturamento">Faturamento</option>
+
+          {/* Vínculo gasto <-> cobrança + imposto Meta pela diferença */}
+          {(entryType === "gasto_anuncio" || entryType === "cobranca_cartao") && (
+            <Field
+              label={entryType === "gasto_anuncio" ? "Vincular à cobrança no cartão (opcional)" : "Vincular ao gasto com anúncio (opcional)"}
+              hint="Ao vincular, o imposto da Meta é calculado pela diferença entre a cobrança no cartão e o gasto com anúncio."
+            >
+              <Select value={linkedId} onChange={(e) => setLinkedId(e.target.value)}>
+                <option value="">Não vincular agora</option>
+                {linkTargets.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.occurred_at} · {currencySymbol(c.currency)} {c.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    {c.description ? ` · ${c.description}` : ""}
+                  </option>
+                ))}
               </Select>
             </Field>
+          )}
+          {linkedTarget && (
+            <p className="rounded-lg border border-[color:var(--color-border)] bg-surface-2 px-3 py-2 text-xs text-muted">
+              Imposto Meta estimado (diferença):{" "}
+              <span className="font-semibold text-foreground">
+                {formatCurrency(Math.abs(linkAmountBRL - toBRL(num(prefill.amount ?? "0"), entryCurrency, usdBrl)), "BRL")}
+              </span>{" "}
+              — refina automaticamente conforme os valores de gasto e cobrança.
+            </p>
+          )}
+
+          {/* Opt-in para dashboard — gasto de anúncio já entra sozinho. */}
+          {entryType === "gasto_anuncio" ? (
+            <p className="text-xs text-muted">Gasto com anúncio entra na dashboard automaticamente como gasto.</p>
+          ) : (
+            <>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="to_dashboard" className="mt-0.5 h-4 w-4 rounded border-[color:var(--color-border)]" />
+                <span>
+                  Refletir na dashboard
+                  <span className="block text-xs text-muted">
+                    Marque para este lançamento aparecer nos números da dashboard (como {direction === "saida" ? "gasto ou faturamento" : "faturamento"}). Sem marcar, fica só no caixa.
+                  </span>
+                </span>
+              </label>
+              {direction === "saida" && (
+                <Field label="Como refletir (se marcado acima)">
+                  <Select name="dashboard_kind" defaultValue="gasto">
+                    <option value="gasto">Gasto</option>
+                    <option value="faturamento">Faturamento</option>
+                  </Select>
+                </Field>
+              )}
+            </>
           )}
           {error && <p className="text-sm text-negative">{error}</p>}
           <div className="flex justify-end gap-2">

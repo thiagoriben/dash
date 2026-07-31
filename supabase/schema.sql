@@ -217,9 +217,13 @@ create table if not exists public.cash_entries (
   counterparty_id uuid references public.profiles(id) on delete set null,
   to_dashboard boolean not null default false,
   dashboard_kind text,
+  entry_type text not null default 'comum',  -- 'comum'|'aporte_pix'|'gasto_anuncio'|'cobranca_cartao'
+  linked_entry_id uuid references public.cash_entries(id) on delete set null, -- vincula gasto_anuncio <-> cobranca_cartao
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
+alter table public.cash_entries add column if not exists entry_type text not null default 'comum';
+alter table public.cash_entries add column if not exists linked_entry_id uuid references public.cash_entries(id) on delete set null;
 
 -- LOG DE ATIVIDADE
 create table if not exists public.activity_log (

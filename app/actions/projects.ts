@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { cookies } from "next/headers"
 import { createClient, createAdminClient } from "@/lib/supabase/server"
 import { getCurrentProfile, savePrefs } from "@/lib/data"
 import { computeSaleNet, receivableDateFor } from "@/lib/finance"
@@ -724,28 +725,68 @@ export async function createCashEntry(formData: FormData) {
   const direction = String(formData.get("direction") ?? "entrada")
   const projectId = String(formData.get("project_id") ?? "") || null
   const bankAccountId = String(formData.get("bank_account_id") ?? "") || null
-  const toDashboard = checkbox(formData, "to_dashboard")
-  const dashboardKind = toDashboard
-    ? direction === "saida"
-      ? String(formData.get("dashboard_kind") ?? "gasto")
-      : "faturamento"
-    : null
+  const currency = normalizeCurrency(String(formData.get("currency") ?? "BRL"))
 
-  const { error } = await supabase.from("cash_entries").insert({
-    owner_id: profile.id,
-    project_id: projectId,
-    direction,
-    amount,
-    currency: normalizeCurrency(String(formData.get("currency") ?? "BRL")),
-    category: String(formData.get("category") ?? "") || null,
-    description: String(formData.get("description") ?? "") || null,
-    occurred_at: String(formData.get("occurred_at") ?? new Date().toISOString().slice(0, 10)),
-    bank_account_id: bankAccountId,
-    to_dashboard: toDashboard,
-    dashboard_kind: dashboardKind,
-    created_by: profile.id,
-  })
+  // Tipo do lançamento (só faz sentido em saídas de projeto, mas guardamos sempre).
+  const allowedTypes = ["comum", "aporte_pix", "gasto_anuncio", "cobranca_cartao"]
+  const rawType = String(formData.get("entry_type") ?? "comum")
+  const entryType = allowedTypes.includes(rawType) ? rawType : "comum"
+  const linkedEntryId = String(formData.get("linked_entry_id") ?? "") || null
+
+  const toDashboard = checkbox(formData, "to_dashboard")
+  // Gasto com anúncio sempre conta como "gasto" na dashboard; cobrança no cartão não.
+  const dashboardKind =
+    entryType === "gasto_anuncio"
+      ? "gasto"
+      : toDashboard
+        ? direction === "saida"
+          ? String(formData.get("dashboard_kind") ?? "gasto")
+          : "faturamento"
+        : null
+
+  // Categoria automática amigável quando o usuário não digita uma.
+  const autoCategory =
+    entryType === "aporte_pix"
+      ? "Aporte (fundos/pix)"
+      : entryType === "gasto_anuncio"
+        ? "Gasto com anúncio"
+        : entryType === "cobranca_cartao"
+          ? "Cobrança no cartão"
+          : null
+  const category = String(formData.get("category") ?? "").trim() || autoCategory
+
+  const { data: inserted, error } = await supabase
+    .from("cash_entries")
+    .insert({
+      owner_id: profile.id,
+      project_id: projectId,
+      direction,
+      amount,
+      currency,
+      category,
+      description: String(formData.get("description") ?? "") || null,
+      occurred_at: String(formData.get("occurred_at") ?? new Date().toISOString().slice(0, 10)),
+      bank_account_id: bankAccountId,
+      to_dashboard: entryType === "gasto_anuncio" ? true : toDashboard,
+      dashboard_kind: dashboardKind,
+      entry_type: entryType,
+      linked_entry_id: linkedEntryId,
+      created_by: profile.id,
+    })
+    .select("id")
+    .maybeSingle()
   if (error) return { error: error.message }
+
+  // Vínculo recíproco: se este lançamento aponta para outro, o outro passa a apontar de volta.
+  if (linkedEntryId && inserted?.id) {
+    await supabase.from("cash_entries").update({ linked_entry_id: inserted.id }).eq("id", linkedEntryId)
+  }
+
+  // Lembra a última moeda escolhida por usuário (memória do formulário).
+  try {
+    const store = await cookies()
+    store.set("last_cash_currency", currency, { path: "/", maxAge: 31536000 })
+  } catch {}
 
   // Reflete no saldo da conta bancária, quando vinculada.
   if (bankAccountId) await applyBankDelta(supabase, bankAccountId, direction === "saida" ? -amount : amount)

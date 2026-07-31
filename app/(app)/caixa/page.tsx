@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { cookies } from "next/headers"
 import {
   getCurrentProfile,
   getVisibleProjects,
@@ -23,6 +24,7 @@ export default async function CaixaPage() {
     getUsdBrlRate(),
   ])
   const currencies = profile.prefs?.currencies ?? DEFAULT_CURRENCIES
+  const lastCurrency = (await cookies()).get("last_cash_currency")?.value
   return (
     <CaixaClient
       entries={entries}
@@ -32,6 +34,7 @@ export default async function CaixaPage() {
       meId={profile.id}
       usdBrl={usdBrl}
       currencies={currencies}
+      lastCurrency={lastCurrency}
     />
   )
 }
