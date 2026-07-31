@@ -1,6 +1,7 @@
 "use client"
 
 import { useActionState, useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Card, Button, Input, Select, Badge } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { createUser, updateUserRole, deleteUser } from "@/app/actions/users"
@@ -16,16 +17,17 @@ export function UsersClient({
   profiles: Profile[]
   currentUserId: string
 }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(createUser, undefined)
   const [, startTransition] = useTransition()
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles)
-  const [live, setLive] = useState(false)
 
   useEffect(() => setProfiles(initialProfiles), [initialProfiles])
 
-  // Admin em tempo real: novos cadastros, mudanças de papel e remoções
-  // aparecem na lista sem recarregar a página.
+  // Admin em tempo real: novos cadastros, mudanças de papel e remoções.
+  // Realtime via WebSocket (produção) + polling de segurança (caso o
+  // WebSocket seja bloqueado, ex. dentro de iframe de preview).
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
@@ -52,11 +54,13 @@ export function UsersClient({
           })
         },
       )
-      .subscribe((status) => setLive(status === "SUBSCRIBED"))
+      .subscribe()
+    const poll = setInterval(() => router.refresh(), 10000)
     return () => {
       void supabase.removeChannel(channel)
+      clearInterval(poll)
     }
-  }, [])
+  }, [router])
 
   // fecha o modal ao criar com sucesso
   if (state?.ok && open) setOpen(false)
@@ -68,11 +72,9 @@ export function UsersClient({
           <h1 className="font-display text-2xl font-semibold">Usuários</h1>
           <p className="flex items-center gap-2 text-sm text-muted">
             Crie contas de acesso por usuário e senha e defina permissões.
-            {live && (
-              <span className="inline-flex items-center gap-1 text-xs text-positive">
-                <Radio size={12} className="animate-pulse" /> ao vivo
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1 text-xs text-positive">
+              <Radio size={12} className="animate-pulse" /> ao vivo
+            </span>
           </p>
         </div>
         <Button onClick={() => setOpen(true)}>
