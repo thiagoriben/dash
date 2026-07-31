@@ -24,13 +24,10 @@ export function Topbar() {
   const [pending, startTransition] = useTransition()
   const period = (searchParams.get("period") as Period) ?? "30d"
 
-  // Seletor de período só faz sentido em telas com métricas por período.
-  // Fica oculto na LISTA de projetos (só nomes) e em telas de organização,
-  // ranking, perfil, config, sócios e chat. No DETALHE do projeto ele aparece.
-  const exactHide = ["/projetos", "/organizacao", "/ranking", "/perfil", "/socios", "/chat"]
-  const prefixHide = ["/config"]
-  const hidePeriod =
-    exactHide.includes(pathname) || prefixHide.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  // O período global só faz sentido no dashboard geral ("/"), onde agrega todos
+  // os projetos. Em qualquer outra tela ele confunde e é inútil, então some.
+  // Cada projeto controla o próprio período dentro das abas.
+  const hidePeriod = pathname !== "/"
 
   function setPeriod(value: string) {
     const params = new URLSearchParams(searchParams.toString())

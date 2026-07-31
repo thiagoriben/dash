@@ -111,15 +111,19 @@ export function Field({
   label,
   children,
   className,
+  hint,
 }: {
   label: string
   children: React.ReactNode
   className?: string
+  /** Descrição curta abaixo do campo, para explicar o que ele faz. */
+  hint?: string
 }) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <Label>{label}</Label>
       {children}
+      {hint ? <p className="text-[11px] leading-snug text-muted">{hint}</p> : null}
     </div>
   )
 }

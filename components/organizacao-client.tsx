@@ -54,6 +54,9 @@ export function OrganizacaoClient({
   todos = [],
   members = [],
   embedded = false,
+  only,
+  title,
+  description,
 }: {
   projectId: string | null
   categories: ShortcutCategory[]
@@ -62,8 +65,12 @@ export function OrganizacaoClient({
   todos?: TodoItem[]
   members?: Profile[]
   embedded?: boolean
+  /** Renderiza apenas uma ferramenta, sem a barra de abas (usado nas rotas dedicadas). */
+  only?: Tab
+  title?: string
+  description?: string
 }) {
-  const [tab, setTab] = React.useState<Tab>("atalhos")
+  const [tab, setTab] = React.useState<Tab>(only ?? "atalhos")
   const [pending, startTransition] = React.useTransition()
 
   // Modais
@@ -87,25 +94,31 @@ export function OrganizacaoClient({
     <div className="mx-auto flex max-w-6xl flex-col gap-5">
       {!embedded && (
         <header className="flex flex-col gap-1">
-          <h1 className="font-display text-2xl font-semibold text-foreground">Organização</h1>
+          <h1 className="font-display text-2xl font-semibold text-foreground">
+            {title ?? "Organização"}
+          </h1>
           <p className="text-sm text-muted">
-            Salve links, imagens, vídeos, IDs e anotações. Tudo fácil de ver, copiar e editar.
+            {description ?? "Salve links, imagens, vídeos, IDs e anotações. Tudo fácil de ver, copiar e editar."}
           </p>
         </header>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-1">
-          <TabBtn active={tab === "atalhos"} onClick={() => setTab("atalhos")}>
-            <Link2 size={15} /> Atalhos
-          </TabBtn>
-          <TabBtn active={tab === "notas"} onClick={() => setTab("notas")}>
-            <StickyNote size={15} /> Notas
-          </TabBtn>
-          <TabBtn active={tab === "tarefas"} onClick={() => setTab("tarefas")}>
-            <ListTodo size={15} /> Tarefas
-          </TabBtn>
-        </div>
+        {only ? (
+          <span />
+        ) : (
+          <div className="inline-flex rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-1">
+            <TabBtn active={tab === "atalhos"} onClick={() => setTab("atalhos")}>
+              <Link2 size={15} /> Atalhos
+            </TabBtn>
+            <TabBtn active={tab === "notas"} onClick={() => setTab("notas")}>
+              <StickyNote size={15} /> Notas
+            </TabBtn>
+            <TabBtn active={tab === "tarefas"} onClick={() => setTab("tarefas")}>
+              <ListTodo size={15} /> Tarefas
+            </TabBtn>
+          </div>
+        )}
         {tab !== "tarefas" && (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setCatModal({ open: true })}>

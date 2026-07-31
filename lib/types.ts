@@ -346,6 +346,10 @@ export type TodoItem = {
   title: string
   done: boolean
   due_kind: TodoDueKind
+  /** Prazo real (YYYY-MM-DD) — habilita os filtros por data. */
+  due_date: string | null
+  /** Concluída e ocultada da lista principal (movida para "Feitas"). */
+  archived: boolean
   position: number
   created_at: string
 }

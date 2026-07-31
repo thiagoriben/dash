@@ -588,10 +588,14 @@ create table if not exists public.todo_items (
   category text,
   title text not null,
   done boolean not null default false,
-  due_kind text not null default 'sem_prazo', -- 'hoje' | 'amanha' | 'sem_prazo'
+  due_kind text not null default 'sem_prazo', -- legado: 'hoje' | 'amanha' | 'sem_prazo'
+  due_date date,                               -- prazo real (habilita filtros por data)
+  archived boolean not null default false,     -- concluída e ocultada ("Feitas")
   position int not null default 0,
   created_at timestamptz not null default now()
 );
+alter table public.todo_items add column if not exists due_date date;
+alter table public.todo_items add column if not exists archived boolean not null default false;
 
 -- MENSAGENS DIRETAS (chat usuário a usuário)
 create table if not exists public.direct_messages (

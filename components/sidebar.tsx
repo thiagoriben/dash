@@ -21,25 +21,38 @@ import {
   PanelLeftOpen,
   LogOut,
   MessageSquare,
-  LayoutGrid,
   Trophy,
+  StickyNote,
+  ListTodo,
+  Calculator,
+  ShieldCheck,
 } from "lucide-react"
 
 type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }
 
-// Seções: visão geral + área global (caixa/recebíveis) + configurações
-const overview: Item[] = [
+// Navegação agrupada por finalidade. Ordem: uso diário no topo, ajustes/admin embaixo.
+const principal: Item[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
+]
+// Social: relações e conversas (amigos, sócios e chats diretos/de projeto).
+const social: Item[] = [
   { href: "/socios", label: "Sócios", icon: Users },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/ranking", label: "Ranking", icon: Trophy },
 ]
-const global: Item[] = [
+// Financeiro global (fora de um projeto específico).
+const financeiro: Item[] = [
   { href: "/caixa", label: "Caixa", icon: Wallet },
   { href: "/recebiveis", label: "Recebíveis", icon: CalendarClock },
-  { href: "/organizacao", label: "Organização", icon: LayoutGrid },
 ]
+// Organização: cada ferramenta como item próprio (atalhos agora ficam dentro dos projetos).
+const organizacao: Item[] = [
+  { href: "/organizacao/notas", label: "Notas", icon: StickyNote },
+  { href: "/organizacao/tarefas", label: "Tarefas", icon: ListTodo },
+]
+// Ferramentas avulsas.
+const ferramentas: Item[] = [{ href: "/calculadora", label: "Calculadora", icon: Calculator }]
 
 export function Sidebar({
   profile,
@@ -62,7 +75,8 @@ export function Sidebar({
     { href: "/config", label: "Configurações", icon: Settings, exact: true },
     { href: "/config/gateways", label: "Gateways", icon: CreditCard },
   ]
-  const admin: Item[] = profile?.role === "admin" ? [{ href: "/usuarios", label: "Usuários", icon: Users }] : []
+  // Tudo que é função de administrador fica reunido em uma única seção "Admin".
+  const admin: Item[] = isAdmin ? [{ href: "/usuarios", label: "Usuários", icon: Users }] : []
 
   return (
     <aside
@@ -78,12 +92,28 @@ export function Sidebar({
         {!collapsed && <span className="font-display text-lg font-semibold neon-text">Dash</span>}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
-        <NavGroup items={overview} pathname={pathname} collapsed={collapsed} />
-        <NavLabel collapsed={collapsed}>Global</NavLabel>
-        <NavGroup items={global} pathname={pathname} collapsed={collapsed} />
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-2">
+        <NavGroup items={principal} pathname={pathname} collapsed={collapsed} />
+        <NavLabel collapsed={collapsed}>Social</NavLabel>
+        <NavGroup items={social} pathname={pathname} collapsed={collapsed} />
+        <NavLabel collapsed={collapsed}>Financeiro</NavLabel>
+        <NavGroup items={financeiro} pathname={pathname} collapsed={collapsed} />
+        <NavLabel collapsed={collapsed}>Organização</NavLabel>
+        <NavGroup items={organizacao} pathname={pathname} collapsed={collapsed} />
+        <NavLabel collapsed={collapsed}>Ferramentas</NavLabel>
+        <NavGroup items={ferramentas} pathname={pathname} collapsed={collapsed} />
+        {admin.length > 0 && (
+          <>
+            <NavLabel collapsed={collapsed}>
+              <span className="inline-flex items-center gap-1">
+                <ShieldCheck size={12} /> Admin
+              </span>
+            </NavLabel>
+            <NavGroup items={admin} pathname={pathname} collapsed={collapsed} />
+          </>
+        )}
         <NavLabel collapsed={collapsed}>Ajustes</NavLabel>
-        <NavGroup items={[...admin, ...config]} pathname={pathname} collapsed={collapsed} />
+        <NavGroup items={config} pathname={pathname} collapsed={collapsed} />
       </nav>
 
       <div className="flex flex-col gap-2 border-t border-[color:var(--color-border)] p-3">
@@ -126,9 +156,9 @@ export function Sidebar({
 
         <Link
           href="/perfil"
-          title="Meu perfil"
+          title="Abrir meu perfil e configurações"
           className={cn(
-            "mt-1 flex items-center gap-3 rounded-xl p-1 transition-colors hover:bg-white/5",
+            "group/perfil mt-1 flex items-center gap-3 rounded-xl p-1 transition-colors hover:bg-white/5",
             collapsed && "justify-center",
           )}
         >
@@ -136,12 +166,19 @@ export function Sidebar({
             {(profile?.username ?? "?").slice(0, 2).toUpperCase()}
           </div>
           {!collapsed && (
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-foreground">
-                {profile?.full_name ?? profile?.username ?? "—"}
+            <>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-foreground">
+                  {profile?.full_name ?? profile?.username ?? "—"}
+                </div>
+                <div className="text-xs capitalize text-muted">{profile?.role ?? "member"}</div>
               </div>
-              <div className="text-xs capitalize text-muted">{profile?.role ?? "member"}</div>
-            </div>
+              <Settings
+                size={16}
+                aria-hidden="true"
+                className="shrink-0 text-muted transition-colors group-hover/perfil:text-primary"
+              />
+            </>
           )}
         </Link>
       </div>
