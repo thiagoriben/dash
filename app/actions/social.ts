@@ -504,8 +504,26 @@ export async function sendChatMessage(projectId: string, body: string) {
   return { ok: true }
 }
 
-/** Mensagem direta (usuário a usuário). Só entre sócios (amizade aceita). */
-export async function sendDirectMessage(recipientId: string, body: string) {
+// Opções de expiração de mensagem temporária (em minutos). 0 = permanente.
+const TTL_MINUTES: Record<string, number> = {
+  off: 0,
+  "1m": 1,
+  "5m": 5,
+  "24h": 60 * 24,
+  "7d": 60 * 24 * 7,
+  "15d": 60 * 24 * 15,
+  "30d": 60 * 24 * 30,
+}
+export const DEFAULT_TTL = "15d"
+
+function expiryFromTtl(ttl: string): string | null {
+  const mins = TTL_MINUTES[ttl] ?? TTL_MINUTES[DEFAULT_TTL]
+  if (!mins) return null
+  return new Date(Date.now() + mins * 60 * 1000).toISOString()
+}
+
+/** Mensagem direta (usuário a usuário). Só entre amigos (amizade aceita). */
+export async function sendDirectMessage(recipientId: string, body: string, ttl: string = DEFAULT_TTL) {
   const supabase = await createClient()
   const me = await getCurrentProfile()
   if (!me) return { error: "Sessão expirada." }
@@ -526,7 +544,7 @@ export async function sendDirectMessage(recipientId: string, body: string) {
 
   const { error } = await supabase
     .from("direct_messages")
-    .insert({ sender_id: me.id, recipient_id: recipientId, body: text })
+    .insert({ sender_id: me.id, recipient_id: recipientId, body: text, expires_at: expiryFromTtl(ttl) })
   if (error) return { error: error.message }
   await createNotifications([
     {
@@ -538,5 +556,67 @@ export async function sendDirectMessage(recipientId: string, body: string) {
     },
   ])
   return { ok: true }
+}
+
+/** Marca como lidas todas as mensagens recebidas de um parceiro. */
+export async function markMessagesRead(otherId: string) {
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me) return { error: "Sessão expirada." }
+  const nowIso = new Date().toISOString()
+  await supabase
+    .from("direct_messages")
+    .update({ read: true, read_at: nowIso })
+    .eq("recipient_id", me.id)
+    .eq("sender_id", otherId)
+    .eq("read", false)
+  // Marca como lidas as notificações de mensagem deste usuário (limpa a aba).
+  await supabase
+    .from("notifications")
+    .update({ read_at: nowIso })
+    .eq("user_id", me.id)
+    .eq("type", "direct_message")
+    .is("read_at", null)
+  return { ok: true }
+}
+
+/** Marca as mensagens recebidas como entregues (delivered). */
+export async function markMessagesDelivered(otherId: string) {
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me) return { ok: false }
+  const nowIso = new Date().toISOString()
+  await supabase
+    .from("direct_messages")
+    .update({ delivered_at: nowIso })
+    .eq("recipient_id", me.id)
+    .eq("sender_id", otherId)
+    .is("delivered_at", null)
+  return { ok: true }
+}
+
+/** Aviso global: só admin. Envia uma notificação discreta a todos os usuários aprovados. */
+export async function sendGlobalNotification(formData: FormData) {
+  const me = await getCurrentProfile()
+  if (!me || me.role !== "admin") return { error: "Apenas administradores." }
+  const title = String(formData.get("title") ?? "").trim()
+  const body = String(formData.get("body") ?? "").trim()
+  const link = String(formData.get("link") ?? "").trim() || null
+  if (!title) return { error: "Escreva um título." }
+
+  const admin = createAdminClient()
+  const { data: users } = await admin.from("profiles").select("id").eq("approved", true)
+  const list = (users ?? []) as { id: string }[]
+  await createNotifications(
+    list.map((u) => ({
+      userId: u.id,
+      type: "global",
+      title,
+      body: body || null,
+      link,
+    })),
+  )
+  revalidatePath("/")
+  return { ok: true, count: list.length }
 }
 

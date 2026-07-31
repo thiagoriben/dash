@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import type { Profile } from "@/lib/types"
 import { approveUser, rejectUser } from "@/app/actions/users"
 import { cn } from "@/lib/utils"
-import { ShieldCheck, Check, X, Users, UserCheck, MessageSquareWarning, FolderKanban } from "lucide-react"
+import { ShieldCheck, Check, X, Users, UserCheck, MessageSquareWarning, FolderKanban, Megaphone } from "lucide-react"
 
 /**
  * Menu único de administração na sidebar. Reúne, num só ícone, tudo que é
@@ -31,6 +31,7 @@ export function AdminMenu({ pending, collapsed }: { pending: Profile[]; collapse
     { href: "/usuarios", label: "Usuários", icon: Users },
     { href: "/admin/projetos", label: "Todos os projetos", icon: FolderKanban },
     { href: "/admin/feedback", label: "Feedback", icon: MessageSquareWarning },
+    { href: "/admin/avisos", label: "Avisos globais", icon: Megaphone },
   ]
 
   return (

@@ -696,6 +696,7 @@ export async function saveGateway(formData: FormData) {
     fee_pct: num(formData.get("fee_pct")),
     fee_fixed: num(formData.get("fee_fixed")),
     withdraw_fee_pct: num(formData.get("withdraw_fee_pct")),
+    withdraw_fee_fixed: num(formData.get("withdraw_fee_fixed")),
     term_days_pix: int(formData.get("term_days_pix")),
     term_days_card: int(formData.get("term_days_card")),
   }

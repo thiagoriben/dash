@@ -1,9 +1,11 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import type { Profile } from "@/lib/types"
+import { createClient } from "@/lib/supabase/client"
 import { useSidebar } from "@/components/app-shell"
 import { AdminMenu } from "@/components/admin-menu"
 import { LogoutButton } from "@/components/logout-button"
@@ -24,19 +26,14 @@ import {
   ShieldCheck,
 } from "lucide-react"
 
-type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }
+type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean; badge?: number }
 
 // Navegação agrupada por finalidade. Sem scroll — todas as opções visíveis.
 const principal: Item[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
 ]
-// Social: relações e conversas (amigos, sócios e chats diretos/de projeto).
-const social: Item[] = [
-  { href: "/socios", label: "Amigos", icon: Users },
-  { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/ranking", label: "Ranking", icon: Trophy },
-]
+
 // Financeiro global (fora de um projeto específico).
 const financeiro: Item[] = [
   { href: "/caixa", label: "Caixa", icon: Wallet },
@@ -51,13 +48,52 @@ const organizacao: Item[] = [
 export function Sidebar({
   profile,
   pending = [],
+  meId = null,
+  unreadChat = 0,
 }: {
   profile: Profile | null
   pending?: Profile[]
+  meId?: string | null
+  unreadChat?: number
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { collapsed, toggle } = useSidebar()
   const isAdmin = profile?.role === "admin"
+  const [unread, setUnread] = useState(unreadChat)
+
+  useEffect(() => setUnread(unreadChat), [unreadChat])
+
+  // Realtime: nova DM recebida enquanto fora do chat incrementa o badge.
+  useEffect(() => {
+    if (!meId) return
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`sidebar-dm-${meId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "direct_messages", filter: `recipient_id=eq.${meId}` },
+        () => {
+          if (!pathname.startsWith("/chat")) setUnread((n) => n + 1)
+          router.refresh()
+        },
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [meId, pathname, router])
+
+  // Zera badge ao entrar no chat.
+  useEffect(() => {
+    if (pathname.startsWith("/chat")) setUnread(0)
+  }, [pathname])
+
+  const social: Item[] = [
+    { href: "/socios", label: "Amigos", icon: Users },
+    { href: "/chat", label: "Chat", icon: MessageSquare, badge: unread },
+    { href: "/ranking", label: "Ranking", icon: Trophy },
+  ]
 
   return (
     <aside
@@ -168,6 +204,7 @@ function NavGroup({
           ? pathname === item.href
           : pathname === item.href || pathname.startsWith(item.href + "/")
         const Icon = item.icon
+        const badge = item.badge ?? 0
         return (
           <Link
             key={item.href}
@@ -175,15 +212,27 @@ function NavGroup({
             prefetch
             title={collapsed ? item.label : undefined}
             className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+              "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
               collapsed && "justify-center px-0",
               active
                 ? "bg-primary/10 text-primary"
                 : "text-muted hover:bg-white/5 hover:text-foreground",
             )}
           >
-            <Icon size={18} />
-            {!collapsed && item.label}
+            <span className="relative">
+              <Icon size={18} />
+              {badge > 0 && collapsed && (
+                <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-semibold text-[color:var(--brand-fg)]">
+                  {badge > 9 ? "9+" : badge}
+                </span>
+              )}
+            </span>
+            {!collapsed && <span className="flex-1">{item.label}</span>}
+            {!collapsed && badge > 0 && (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-[color:var(--brand-fg)]">
+                {badge > 99 ? "99+" : badge}
+              </span>
+            )}
           </Link>
         )
       })}

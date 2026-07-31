@@ -5,7 +5,7 @@ import { Topbar } from "@/components/topbar"
 import { MobileNav } from "@/components/mobile-nav"
 import { AppShell } from "@/components/app-shell"
 import { BugDetector } from "@/components/bug-detector"
-import { getCurrentProfile, getPendingProfiles, getNotifications } from "@/lib/data"
+import { getCurrentProfile, getPendingProfiles, getNotifications, getUnreadTotal } from "@/lib/data"
 import { markDailyAccess } from "@/lib/activity"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -18,9 +18,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (profile?.approved) void markDailyAccess(profile)
 
   const collapsed = profile?.prefs?.sidebar_collapsed ?? false
-  const [pending, notifications] = await Promise.all([
+  const [pending, notifications, unreadChat] = await Promise.all([
     profile?.role === "admin" ? getPendingProfiles() : Promise.resolve([]),
     profile ? getNotifications(profile.id) : Promise.resolve([]),
+    profile ? getUnreadTotal(profile.id) : Promise.resolve(0),
   ])
 
   // Cor de destaque personalizada: injeta como override de --brand.
@@ -37,7 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell
       initialCollapsed={collapsed}
       sidebar={
-        <Sidebar profile={profile} pending={pending} />
+        <Sidebar profile={profile} pending={pending} meId={profile?.id ?? null} unreadChat={unreadChat} />
       }
       topbar={
         <Suspense fallback={<div className="h-16 border-b border-[color:var(--color-border)]" />}>

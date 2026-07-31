@@ -43,7 +43,7 @@ export default async function AdminProjetosPage() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
                   <p className="truncate text-xs text-muted">
-                    Dono: {ownerName.get(p.owner_id) ?? "—"} · {p.region?.toUpperCase()} ·{" "}
+                    Dono: {(p.owner_id ? ownerName.get(p.owner_id) : null) ?? "—"} · {p.region?.toUpperCase()} ·{" "}
                     {p.currency?.toUpperCase()}
                   </p>
                 </div>

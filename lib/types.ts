@@ -154,6 +154,7 @@ export type PaymentGateway = {
   fee_pct: number
   fee_fixed: number
   withdraw_fee_pct: number
+  withdraw_fee_fixed: number
   term_days_pix: number
   term_days_card: number
   created_at: string

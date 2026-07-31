@@ -1,12 +1,34 @@
 "use client"
 
 import { useEffect, useRef, useState, useTransition } from "react"
-import { Bell, Check } from "lucide-react"
+import {
+  Bell,
+  Check,
+  UserPlus,
+  UserCheck,
+  MessageSquare,
+  Bug,
+  Megaphone,
+  FolderPlus,
+  MessageSquareWarning,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { markNotificationRead, markAllNotificationsRead } from "@/app/actions/social"
 import type { Notification } from "@/lib/data"
 import { cn } from "@/lib/utils"
+
+const typeIcon: Record<string, { icon: typeof Bell; tone: string }> = {
+  friend_request: { icon: UserPlus, tone: "text-sky-300" },
+  friend_accepted: { icon: UserCheck, tone: "text-primary" },
+  direct_message: { icon: MessageSquare, tone: "text-primary" },
+  project_invite: { icon: FolderPlus, tone: "text-sky-300" },
+  join_request: { icon: FolderPlus, tone: "text-amber-300" },
+  join_response: { icon: FolderPlus, tone: "text-primary" },
+  feedback: { icon: MessageSquareWarning, tone: "text-amber-300" },
+  auto_bug: { icon: Bug, tone: "text-danger" },
+  global: { icon: Megaphone, tone: "text-sky-300" },
+}
 
 export function NotificationBell({
   meId,
@@ -51,16 +73,15 @@ export function NotificationBell({
   }, [])
 
   function openNotification(n: Notification) {
-    if (!n.read_at) {
-      setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)))
-      startTransition(() => void markNotificationRead(n.id))
-    }
+    // Ao ler, remove da aba (mantém o painel limpo, como pedido).
+    setItems((prev) => prev.filter((x) => x.id !== n.id))
+    if (!n.read_at) startTransition(() => void markNotificationRead(n.id))
     setOpen(false)
     if (n.link) router.push(n.link)
   }
 
   function markAll() {
-    setItems((prev) => prev.map((x) => ({ ...x, read_at: x.read_at ?? new Date().toISOString() })))
+    setItems([])
     startTransition(() => void markAllNotificationsRead())
   }
 
@@ -98,26 +119,35 @@ export function NotificationBell({
             {items.length === 0 ? (
               <p className="px-3 py-6 text-center text-sm text-muted">Nenhuma notificação.</p>
             ) : (
-              items.map((n) => (
-                <button
-                  key={n.id}
-                  type="button"
-                  onClick={() => openNotification(n)}
-                  className={cn(
-                    "flex w-full flex-col gap-0.5 border-b border-[color:var(--color-border)] px-3 py-2 text-left transition-colors hover:bg-white/[0.03]",
-                    !n.read_at && "bg-primary/[0.06]",
-                  )}
-                >
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    {!n.read_at && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
-                    {n.title}
-                  </span>
-                  {n.body && <span className="line-clamp-2 text-xs text-muted">{n.body}</span>}
-                  <span className="text-[10px] text-muted">
-                    {new Date(n.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                </button>
-              ))
+              items.map((n) => {
+                const meta = typeIcon[n.type] ?? { icon: Bell, tone: "text-muted" }
+                const Icon = meta.icon
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => openNotification(n)}
+                    className={cn(
+                      "flex w-full items-start gap-2.5 border-b border-[color:var(--color-border)] px-3 py-2 text-left transition-colors hover:bg-white/[0.03]",
+                      !n.read_at && "bg-primary/[0.06]",
+                    )}
+                  >
+                    <span className={cn("mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/5", meta.tone)}>
+                      <Icon size={14} />
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="flex items-center gap-2 text-sm font-medium">
+                        {!n.read_at && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                        <span className="truncate">{n.title}</span>
+                      </span>
+                      {n.body && <span className="line-clamp-2 text-xs text-muted">{n.body}</span>}
+                      <span className="text-[10px] text-muted">
+                        {new Date(n.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })
             )}
           </div>
         </div>

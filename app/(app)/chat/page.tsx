@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { getCurrentProfile, getPartners, getDirectMessages } from "@/lib/data"
+import { getCurrentProfile, getPartners, getDirectMessages, getUnreadByPartner } from "@/lib/data"
 import { ChatClient } from "@/components/chat-client"
 
 export const metadata = { title: "Chat | Dash" }
@@ -13,9 +13,9 @@ export default async function ChatPage({
   if (!me) redirect("/login")
 
   const { u } = await searchParams
-  const partners = await getPartners(me.id)
+  const [partners, unreadByPartner] = await Promise.all([getPartners(me.id), getUnreadByPartner(me.id)])
 
-  // Sócio ativo: query param ou o primeiro da lista.
+  // Amigo ativo: query param ou o primeiro da lista.
   const active = partners.find((p) => p.id === u) ?? partners[0] ?? null
   const initialMessages = active ? await getDirectMessages(me.id, active.id) : []
 
@@ -25,6 +25,7 @@ export default async function ChatPage({
       partners={partners}
       activeId={active?.id ?? null}
       initialMessages={initialMessages}
+      unreadByPartner={unreadByPartner}
     />
   )
 }

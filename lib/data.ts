@@ -471,10 +471,12 @@ export type Notification = {
 
 export async function getNotifications(meId: string, limit = 30): Promise<Notification[]> {
   const supabase = await createClient()
+  // Só não-lidas: quando o usuário lê, some da aba (pedido do produto).
   const { data } = await supabase
     .from("notifications")
     .select("*")
     .eq("user_id", meId)
+    .is("read_at", null)
     .order("created_at", { ascending: false })
     .limit(limit)
   return (data ?? []) as Notification[]
@@ -596,6 +598,32 @@ export type DirectMessage = {
   body: string
   read: boolean
   created_at: string
+  delivered_at: string | null
+  read_at: string | null
+  expires_at: string | null
+}
+
+/** Não-lidas por parceiro: { [otherUserId]: count }. Ignora mensagens expiradas. */
+export async function getUnreadByPartner(meId: string): Promise<Record<string, number>> {
+  const supabase = await createClient()
+  const nowIso = new Date().toISOString()
+  const { data } = await supabase
+    .from("direct_messages")
+    .select("sender_id")
+    .eq("recipient_id", meId)
+    .eq("read", false)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+  const counts: Record<string, number> = {}
+  for (const r of (data ?? []) as { sender_id: string }[]) {
+    counts[r.sender_id] = (counts[r.sender_id] ?? 0) + 1
+  }
+  return counts
+}
+
+/** Total de mensagens não-lidas (para badge da sidebar). */
+export async function getUnreadTotal(meId: string): Promise<number> {
+  const counts = await getUnreadByPartner(meId)
+  return Object.values(counts).reduce((a, b) => a + b, 0)
 }
 
 /** Sócios (amizades aceitas) como lista simples de perfis. */
@@ -618,15 +646,17 @@ export async function getPublicProfileByUsername(username: string, meId: string)
   return p
 }
 
-/** Mensagens diretas entre o usuário logado e outro (ordem cronológica). */
+/** Mensagens diretas entre o usuário logado e outro (ordem cronológica, sem expiradas). */
 export async function getDirectMessages(meId: string, otherId: string): Promise<DirectMessage[]> {
   const supabase = await createClient()
+  const nowIso = new Date().toISOString()
   const { data } = await supabase
     .from("direct_messages")
     .select("*")
     .or(
       `and(sender_id.eq.${meId},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${meId})`,
     )
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
     .order("created_at", { ascending: true })
     .limit(200)
   return (data ?? []) as DirectMessage[]
