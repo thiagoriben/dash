@@ -1,6 +1,6 @@
 "use server"
 
-import { createClient } from "@/lib/supabase/server"
+import { createClient, createAdminClient } from "@/lib/supabase/server"
 import { getCurrentProfile } from "@/lib/data"
 import { revalidatePath } from "next/cache"
 import type { Prefs } from "@/lib/types"
@@ -35,7 +35,33 @@ export async function updateMyProfile(
     .eq("id", me.id)
 
   if (error) return { error: "Não foi possível salvar." }
+
+  // Registra o email real no usuário do Supabase (metadata), sem trocar o email
+  // de login (username@dash.local) para não quebrar a autenticação por usuário.
+  if (recoveryEmail) {
+    try {
+      const admin = createAdminClient()
+      await admin.auth.admin.updateUserById(me.id, {
+        user_metadata: { recovery_email: recoveryEmail },
+      })
+    } catch {
+      // metadata é complementar — falha aqui não bloqueia o salvamento do perfil
+    }
+  }
+
   revalidatePath("/perfil")
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/** Dispensa o aviso de cadastro de email real — some para sempre depois disso. */
+export async function dismissEmailNotice() {
+  const me = await getCurrentProfile()
+  if (!me) return { error: "Sessão expirada." }
+  const prefs: Prefs = { ...(me.prefs ?? {}), email_notice_dismissed: true }
+  const supabase = await createClient()
+  const { error } = await supabase.from("profiles").update({ prefs }).eq("id", me.id)
+  if (error) return { error: "Não foi possível salvar." }
   revalidatePath("/", "layout")
   return { ok: true }
 }

@@ -112,15 +112,25 @@ export function TabOverview({
   const fCashEntries = useMemo(() => cashEntries.filter((c) => inRange(c.occurred_at)), [cashEntries, range])
 
   // ---- Moeda de exibição ----
+  // "__ind__" ativa o modo individual: cada métrica escolhe sua própria moeda.
   const [displayCur, setDisplayCur] = useState(projectCurrency)
+  const individual = displayCur === "__ind__"
+  const [perCur, setPerCur] = useState<Record<string, string>>({})
   const displayOptions = useMemo(
     () => Array.from(new Set([projectCurrency, "BRL", ...currencies].map((c) => c.toUpperCase()))),
     [projectCurrency, currencies],
   )
-  // Breakdowns são calculados em BRL — converte para a moeda de exibição.
-  const brlToDisplay = (brl: number) =>
-    normalizeCurrency(displayCur) === "BRL" ? brl : brl / (usdBrl || 1)
-  const displayMoney = { currency: displayCur, toDisplay: brlToDisplay }
+  // Métricas monetárias que aceitam seleção de moeda (as demais são % ou contagem).
+  const MONETARY_WIDGETS = useMemo(
+    () => new Set(["spend", "revenue", "profit", "cpa", "ticket", "trafficTax", "gatewayFees", "salesTax", "otherSpend"]),
+    [],
+  )
+  // Converte um valor em BRL para uma moeda alvo.
+  const brlToCur = (brl: number, cur: string) =>
+    normalizeCurrency(cur) === "BRL" ? brl : brl / (usdBrl || 1)
+  // Moeda usada no gráfico/série (no modo individual cai para a moeda do projeto).
+  const chartCur = individual ? projectCurrency : displayCur
+  const brlToDisplay = (brl: number) => brlToCur(brl, chartCur)
 
   /** Converte um valor da moeda digitada para a moeda do projeto (armazenamento). */
   function toProjectCurrency(raw: string): string {
@@ -210,6 +220,7 @@ export function TabOverview({
                 {c} ({currencySymbol(c)})
               </option>
             ))}
+            <option value="__ind__">Individual (por métrica)</option>
           </Select>
           <Select
             aria-label="Como exibir o gasto"
@@ -247,7 +258,7 @@ export function TabOverview({
         </div>
       </div>
 
-      {(rangePreset === "custom" || displayCur !== projectCurrency) && (
+      {(rangePreset === "custom" || (displayCur !== projectCurrency && !individual)) && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[color:var(--color-border)] bg-white/[0.02] px-3 py-2 text-sm">
           {rangePreset === "custom" && (
             <div className="flex items-center gap-2">
@@ -269,7 +280,7 @@ export function TabOverview({
               />
             </div>
           )}
-          {displayCur !== projectCurrency && (
+          {displayCur !== projectCurrency && !individual && (
             <span className="text-xs text-muted">
               Exibindo em {displayCur} · convertido de {projectCurrency} pela cotação US$ {usdBrl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
             </span>
@@ -279,9 +290,31 @@ export function TabOverview({
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {widgetKeys.map((k) => {
-          const w = buildWidget(k, breakdown, view, base, displayMoney)
+          const isMonetary = MONETARY_WIDGETS.has(k)
+          // Moeda efetiva: no modo individual usa a escolha da métrica; senão a moeda global.
+          const effCur = individual ? perCur[k] ?? projectCurrency : displayCur
+          const money = { currency: effCur, toDisplay: (brl: number) => brlToCur(brl, effCur) }
+          const w = buildWidget(k, breakdown, view, base, money)
           if (!w) return null
-          return <KpiCard key={k} label={w.label} value={w.value} hint={w.hint ?? undefined} info={w.desc} accent={w.accent} />
+          const action =
+            individual && isMonetary ? (
+              <CurrencyMini
+                value={effCur}
+                options={displayOptions}
+                onChange={(c) => setPerCur((p) => ({ ...p, [k]: c }))}
+              />
+            ) : undefined
+          return (
+            <KpiCard
+              key={k}
+              label={w.label}
+              value={w.value}
+              hint={w.hint ?? undefined}
+              info={w.desc}
+              accent={w.accent}
+              action={action}
+            />
+          )
         })}
       </div>
 
@@ -299,7 +332,7 @@ export function TabOverview({
           </CardHeader>
           <CardContent>
             {series.length > 1 ? (
-              <SpendRevenueChart data={series} currency={displayCur} />
+              <SpendRevenueChart data={series} currency={chartCur} />
             ) : (
               <div className="flex h-[280px] items-center justify-center text-center text-sm text-muted">
                 Sem métricas ainda — lance o primeiro dia para ver a evolução.
@@ -395,6 +428,36 @@ export function TabOverview({
           </div>
         </form>
       </Modal>
+    </div>
+  )
+}
+
+/** Seletor compacto de moeda para uma métrica individual (topo do card). */
+function CurrencyMini({
+  value,
+  options,
+  onChange,
+}: {
+  value: string
+  options: string[]
+  onChange: (c: string) => void
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-[color:var(--color-border)] p-0.5">
+      {options.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onChange(c)}
+          className={`rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+            normalizeCurrency(value) === normalizeCurrency(c)
+              ? "bg-accent text-accent-fg"
+              : "text-muted hover:text-foreground"
+          }`}
+        >
+          {currencySymbol(c)}
+        </button>
+      ))}
     </div>
   )
 }

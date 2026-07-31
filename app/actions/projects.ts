@@ -242,6 +242,51 @@ export async function removeProjectMember(projectId: string, id: string) {
   return { ok: true }
 }
 
+/** Sócio (colaborador) sai por conta própria de um projeto. Dono não sai (deve excluir). */
+export async function leaveProject(projectId: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: "Não autenticado." }
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("owner_id, name")
+    .eq("id", projectId)
+    .maybeSingle()
+  if (!project) return { error: "Projeto não encontrado." }
+  if (project.owner_id === profile.id)
+    return { error: "O dono não pode sair. Exclua o projeto ou transfira a posse." }
+
+  const { error } = await supabase
+    .from("project_members")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("user_id", profile.id)
+  if (error) return { error: error.message }
+
+  // Avisa o dono que o sócio saiu.
+  const admin = createAdminClient()
+  await admin.from("notifications").insert({
+    user_id: project.owner_id,
+    type: "project_member_left",
+    title: "Um sócio saiu do projeto",
+    body: `${profile.full_name || profile.username} saiu de "${project.name}".`,
+    link: `/projetos/${projectId}`,
+  })
+
+  await logActivity({
+    actor: profile,
+    action: "delete",
+    entity: "project",
+    entityId: projectId,
+    projectId,
+    summary: `Saiu do projeto "${project.name}"`,
+  })
+  revalidatePath("/projetos")
+  revalidatePath("/")
+  return { ok: true }
+}
+
 /* ---------- Gastos ---------- */
 
 /**

@@ -17,12 +17,15 @@ export function AppShell({
   sidebar,
   topbar,
   mobileNav,
+  banner,
   children,
 }: {
   initialCollapsed: boolean
   sidebar: React.ReactNode
   topbar: React.ReactNode
   mobileNav: React.ReactNode
+  /** Faixa opcional exibida no topo do conteúdo (ex.: aviso de email). */
+  banner?: React.ReactNode
   children: React.ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)

@@ -52,6 +52,8 @@ export type Prefs = {
   project_widgets?: string[]
   /** Email opcional para recuperação de senha. */
   recovery_email?: string
+  /** Marca que o aviso de cadastrar email real já foi dispensado (aparece só uma vez). */
+  email_notice_dismissed?: boolean
   /** Cor de destaque do app (hex). Aplicada globalmente. */
   accent_color?: string
   /** Cores de badges por chave (ex.: "usd", "br", "latam"). */

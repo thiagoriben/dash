@@ -19,9 +19,9 @@ import {
   Badge,
 } from "@/components/ui"
 import { Modal } from "@/components/modal"
-import { addProjectMember, removeProjectMember } from "@/app/actions/projects"
+import { addProjectMember, removeProjectMember, leaveProject } from "@/app/actions/projects"
 import { respondJoinRequest, inviteFriendToProject } from "@/app/actions/social"
-import { Plus, Trash2, Crown, Users, Copy, Check, UserCheck, Inbox, UserPlus } from "lucide-react"
+import { Plus, Trash2, Crown, Users, Copy, Check, UserCheck, Inbox, UserPlus, LogOut } from "lucide-react"
 
 export function TabMembers({
   project,
@@ -46,7 +46,21 @@ export function TabMembers({
   const [copied, setCopied] = useState(false)
   const [invitedIds, setInvitedIds] = useState<string[]>([])
   const [inviteError, setInviteError] = useState<string>()
+  const [leaveOpen, setLeaveOpen] = useState(false)
+  const [leaveError, setLeaveError] = useState<string>()
   const router = useRouter()
+
+  // Sócio (colaborador que não é dono) pode sair do projeto.
+  const isMember = !isOwner && !!meId && members.some((m) => m.user_id === meId)
+
+  function leave() {
+    setLeaveError(undefined)
+    startTransition(async () => {
+      const res = await leaveProject(project.id)
+      if (res?.error) setLeaveError(res.error)
+      else router.push("/projetos")
+    })
+  }
 
   // Amigos que ainda não participam do projeto (nem dono, nem membro).
   const memberIds = new Set([project.owner_id, ...members.map((m) => m.user_id)])
@@ -259,6 +273,43 @@ export function TabMembers({
           </Table>
         </CardContent>
       </Card>
+
+      {/* Sócio pode sair do projeto por conta própria */}
+      {isMember && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-negative">
+              <LogOut size={16} /> Sair do projeto
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted">
+              Você deixa de ser sócio e perde o acesso a este projeto. Pode voltar a pedir entrada depois.
+            </p>
+            <Button size="sm" variant="outline" onClick={() => setLeaveOpen(true)} disabled={pending}>
+              <LogOut size={14} /> Sair
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Modal open={leaveOpen} onClose={() => setLeaveOpen(false)} title="Sair do projeto">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted">
+            Tem certeza que quer sair de <span className="font-medium text-foreground">{project.name}</span>? Você perde o
+            acesso imediatamente.
+          </p>
+          {leaveError ? <p className="text-sm text-negative">{leaveError}</p> : null}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" type="button" onClick={() => setLeaveOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="danger" onClick={leave} disabled={pending}>
+              {pending ? "Saindo..." : "Sair do projeto"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Adicionar colaborador">
         <form action={onSubmit} className="flex flex-col gap-4">

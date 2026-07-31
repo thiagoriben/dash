@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { BankAccount, CashEntry, Profile, Project } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
-import { toBRL, normalizeCurrency, currencySymbol } from "@/lib/currency"
+import { toBRL, fromBRL, convertCurrency, normalizeCurrency, currencySymbol } from "@/lib/currency"
 import { Card, CardContent, Button, Field, Input, Select, Badge, Table, Th, Td } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { RowActions } from "@/components/row-actions"
@@ -84,6 +84,18 @@ export function CaixaClient({
   const [period, setPeriod] = useState<PeriodKey>("30d")
   const [customFrom, setCustomFrom] = useState("")
   const [customTo, setCustomTo] = useState("")
+  // Moeda de exibição: modo global (uma moeda para tudo) ou individual (por card).
+  const DISPLAY_CURRENCIES = ["BRL", "USD"] as const
+  const [displayMode, setDisplayMode] = useState<"global" | "individual">("global")
+  const [globalCur, setGlobalCur] = useState<string>("BRL")
+  const [cardCur, setCardCur] = useState<Record<string, string>>({
+    saldo: "BRL",
+    entradas: "BRL",
+    saidas: "BRL",
+  })
+  // Moeda efetiva de um card: no modo global todos seguem globalCur.
+  const curOf = (key: string) => (displayMode === "global" ? globalCur : cardCur[key] ?? "BRL")
+  const setCardCurrency = (key: string, cur: string) => setCardCur((p) => ({ ...p, [key]: cur }))
   const [entryOpen, setEntryOpen] = useState(false)
   const [direction, setDirection] = useState<"entrada" | "saida">("entrada")
   // Tipo da saída e vínculo (gasto de anúncio <-> cobrança no cartão) para o imposto Meta.
@@ -340,13 +352,73 @@ export function CaixaClient({
             </Button>
           )}
         </div>
+
+        {/* Moeda de exibição: global (uma moeda) ou individual (por card) */}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-muted">Exibir em</span>
+          <div className="inline-flex rounded-xl border border-[color:var(--color-border)] p-1">
+            {DISPLAY_CURRENCIES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => {
+                  setDisplayMode("global")
+                  setGlobalCur(c)
+                }}
+                className={`rounded-lg px-2.5 py-1 text-sm transition-colors ${
+                  displayMode === "global" && globalCur === c
+                    ? "bg-accent text-accent-fg"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                {currencySymbol(c)}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setDisplayMode("individual")}
+              className={`rounded-lg px-2.5 py-1 text-sm transition-colors ${
+                displayMode === "individual" ? "bg-accent text-accent-fg" : "text-muted hover:text-foreground"
+              }`}
+            >
+              Individual
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <KpiCard icon={<Wallet size={18} />} tone="primary" label="Saldo do período" value={saldo} />
-        <KpiCard icon={<ArrowUpRight size={18} />} tone="positive" label="Entradas" value={entradas} />
-        <KpiCard icon={<ArrowDownRight size={18} />} tone="negative" label="Saídas" value={saidas} />
+        <KpiCard
+          icon={<Wallet size={18} />}
+          tone="primary"
+          label="Saldo do período"
+          valueBRL={saldo}
+          currency={curOf("saldo")}
+          usdBrl={usdBrl}
+          currencies={DISPLAY_CURRENCIES}
+          onCurrency={displayMode === "individual" ? (c) => setCardCurrency("saldo", c) : undefined}
+        />
+        <KpiCard
+          icon={<ArrowUpRight size={18} />}
+          tone="positive"
+          label="Entradas"
+          valueBRL={entradas}
+          currency={curOf("entradas")}
+          usdBrl={usdBrl}
+          currencies={DISPLAY_CURRENCIES}
+          onCurrency={displayMode === "individual" ? (c) => setCardCurrency("entradas", c) : undefined}
+        />
+        <KpiCard
+          icon={<ArrowDownRight size={18} />}
+          tone="negative"
+          label="Saídas"
+          valueBRL={saidas}
+          currency={curOf("saidas")}
+          usdBrl={usdBrl}
+          currencies={DISPLAY_CURRENCIES}
+          onCurrency={displayMode === "individual" ? (c) => setCardCurrency("saidas", c) : undefined}
+        />
       </div>
 
       {/* Contas bancárias (só no pessoal) */}
@@ -438,8 +510,15 @@ export function CaixaClient({
                       }`}
                       data-money
                     >
-                      {c.direction === "entrada" ? "+" : "−"}
-                      {currencySymbol(c.currency ?? "BRL")} {c.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      {(() => {
+                        // No modo global, converte para a moeda escolhida; no individual, mostra a moeda original.
+                        const rowCur = displayMode === "global" ? globalCur : c.currency ?? "BRL"
+                        const val = convertCurrency(c.amount, c.currency ?? "BRL", rowCur, usdBrl)
+                        return `${c.direction === "entrada" ? "+" : "−"}${currencySymbol(rowCur)} ${val.toLocaleString(
+                          "pt-BR",
+                          { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                        )}`
+                      })()}
                     </Td>
                     <Td className="text-right">
                       <RowActions onDelete={() => deleteCashEntry(c.id)} />
@@ -795,12 +874,22 @@ function KpiCard({
   icon,
   tone,
   label,
-  value,
+  valueBRL,
+  currency,
+  usdBrl,
+  currencies,
+  onCurrency,
 }: {
   icon: React.ReactNode
   tone: "primary" | "positive" | "negative"
   label: string
-  value: number
+  /** Valor já somado em BRL; convertido para a moeda de exibição na renderização. */
+  valueBRL: number
+  currency: string
+  usdBrl: number
+  currencies: readonly string[]
+  /** Quando definido, mostra o seletor de moeda individual do card. */
+  onCurrency?: (c: string) => void
 }) {
   const toneClass =
     tone === "positive"
@@ -808,13 +897,34 @@ function KpiCard({
       : tone === "negative"
         ? "bg-negative/10 text-negative"
         : "bg-primary/10 text-primary"
+  const shown = fromBRL(valueBRL, currency, usdBrl)
   return (
     <Card>
       <CardContent className="flex items-center gap-3 p-5">
         <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${toneClass}`}>{icon}</div>
-        <div>
-          <p className="text-xs text-muted">{label}</p>
-          <p className="money font-mono text-xl font-semibold" data-money>{formatCurrency(value)}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted">{label}</p>
+            {onCurrency && (
+              <div className="inline-flex rounded-lg border border-[color:var(--color-border)] p-0.5">
+                {currencies.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => onCurrency(c)}
+                    className={`rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+                      currency === c ? "bg-accent text-accent-fg" : "text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {currencySymbol(c)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="money font-mono text-xl font-semibold" data-money>
+            {formatCurrency(shown, currency)}
+          </p>
         </div>
       </CardContent>
     </Card>

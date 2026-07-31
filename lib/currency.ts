@@ -29,3 +29,23 @@ export function toBRL(amount: number, currency: Currency, usdBrl: number): numbe
   if (code === "BRL") return amount
   return amount * usdBrl
 }
+
+/**
+ * Converte um valor já em BRL para a moeda de exibição alvo.
+ * Qualquer moeda diferente de BRL é tratada como dólar (única cotação suportada hoje).
+ */
+export function fromBRL(amountBRL: number, target: Currency | string, usdBrl: number): number {
+  const code = normalizeCurrency(target)
+  if (code === "BRL") return amountBRL
+  return usdBrl ? amountBRL / usdBrl : amountBRL
+}
+
+/** Converte entre duas moedas arbitrárias passando por BRL. */
+export function convertCurrency(
+  amount: number,
+  from: Currency | string,
+  to: Currency | string,
+  usdBrl: number,
+): number {
+  return fromBRL(toBRL(amount, from as Currency, usdBrl), to, usdBrl)
+}

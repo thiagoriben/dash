@@ -11,6 +11,7 @@ export function KpiCard({
   trend,
   icon,
   accent = "primary",
+  action,
 }: {
   label: string
   value: string
@@ -21,6 +22,8 @@ export function KpiCard({
   trend?: number[]
   icon?: React.ReactNode
   accent?: "primary" | "positive" | "negative" | "warning" | "secondary"
+  /** Controle opcional no topo direito do card (ex.: seletor de moeda individual). */
+  action?: React.ReactNode
 }) {
   const positive = (delta ?? 0) >= 0
   const accentColor = {
@@ -43,7 +46,9 @@ export function KpiCard({
             </span>
           ) : null}
         </div>
-        {typeof delta === "number" ? (
+        {action ? (
+          action
+        ) : typeof delta === "number" ? (
           <span
             className={cn(
               "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
