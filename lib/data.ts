@@ -324,6 +324,21 @@ export async function getCashEntriesForProjects(
   return (data ?? []) as CashEntry[]
 }
 
+/**
+ * Ledger completo da carteira de um projeto — TODOS os lançamentos de caixa do
+ * projeto (inclusive os espelhos de gasto de anúncio com to_dashboard=false).
+ * Usado na aba "Caixa" do projeto, que funciona como a carteira do projeto.
+ */
+export async function getProjectWalletEntries(projectId: string): Promise<CashEntry[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("cash_entries")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("occurred_at", { ascending: false })
+  return (data ?? []) as CashEntry[]
+}
+
 /** Contas bancárias/carteiras do usuário (gestor financeiro pessoal). */
 export async function getBankAccounts(profile: Profile | null): Promise<BankAccount[]> {
   if (!profile) return []
@@ -415,6 +430,91 @@ export async function getMyJoinRequests(meId: string): Promise<JoinRequestView[]
     created_at: r.created_at,
     profile: null,
     projectName: r.projects?.name,
+  }))
+}
+
+/* ---------- Notificações ---------- */
+export type Notification = {
+  id: string
+  user_id: string
+  type: string
+  title: string
+  body: string | null
+  link: string | null
+  data: Record<string, unknown> | null
+  read_at: string | null
+  created_at: string
+}
+
+export async function getNotifications(meId: string, limit = 30): Promise<Notification[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", meId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+  return (data ?? []) as Notification[]
+}
+
+/* ---------- Convites de projeto (para o usuário logado) ---------- */
+export type ProjectInvitationView = {
+  id: string
+  project_id: string
+  projectName: string | null
+  inviter: Profile | null
+  role: string
+  status: string
+  created_at: string
+}
+
+export async function getIncomingProjectInvitations(meId: string): Promise<ProjectInvitationView[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("project_invitations")
+    .select("*, projects(name), inviter:profiles!project_invitations_inviter_id_fkey(*)")
+    .eq("invitee_id", meId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    project_id: r.project_id,
+    projectName: r.projects?.name ?? null,
+    inviter: (r.inviter as Profile) ?? null,
+    role: r.role,
+    status: r.status,
+    created_at: r.created_at,
+  }))
+}
+
+/* ---------- Feedback (admin) ---------- */
+export type FeedbackView = {
+  id: string
+  user_id: string | null
+  kind: string
+  message: string
+  page: string | null
+  status: string
+  created_at: string
+  profile: Profile | null
+}
+
+export async function getFeedback(): Promise<FeedbackView[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("feedback")
+    .select("*, profile:profiles(*)")
+    .order("created_at", { ascending: false })
+    .limit(200)
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    user_id: r.user_id,
+    kind: r.kind,
+    message: r.message,
+    page: r.page,
+    status: r.status,
+    created_at: r.created_at,
+    profile: (r.profile as Profile) ?? null,
   }))
 }
 

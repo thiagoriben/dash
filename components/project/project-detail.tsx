@@ -132,6 +132,8 @@ export function ProjectDetail(props: {
   adAccounts: AdAccount[]
   cardCharges: CardCharge[]
   cashEntries: CashEntry[]
+  /** Ledger completo da carteira do projeto (todos os lançamentos, inclusive espelhos de ads). */
+  walletEntries?: CashEntry[]
   activity: ActivityLog[]
   owner: Profile | null
   isOwner: boolean
@@ -272,7 +274,7 @@ export function ProjectDetail(props: {
           )}
         {tab === "Caixa" && (
           <CaixaClient
-            entries={props.cashEntries}
+            entries={props.walletEntries ?? props.cashEntries}
             projects={[project]}
             banks={props.banks}
             profiles={props.profiles}

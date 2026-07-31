@@ -12,6 +12,7 @@ import {
   getAdAccounts,
   getCardCharges,
   getCashEntriesForProjects,
+  getProjectWalletEntries,
   getPaymentGateways,
   getProfitSplits,
   getProfiles,
@@ -60,6 +61,7 @@ export default async function ProjectPage({
     adAccounts,
     cardCharges,
     cashEntries,
+    walletEntries,
     gateways,
     splits,
     profiles,
@@ -82,6 +84,7 @@ export default async function ProjectPage({
     getAdAccounts(id),
     getCardCharges([id], from, to),
     getCashEntriesForProjects([id], from, to),
+    getProjectWalletEntries(id),
     getPaymentGateways(profile.id),
     getProfitSplits(id),
     getProfiles(),
@@ -114,6 +117,7 @@ export default async function ProjectPage({
       adAccounts={adAccounts}
       cardCharges={cardCharges}
       cashEntries={cashEntries}
+      walletEntries={walletEntries}
       gateways={gateways}
       splits={splits}
       profiles={profiles}

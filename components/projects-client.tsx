@@ -238,6 +238,9 @@ export function ProjectsClient({
               </Select>
             </Field>
           </div>
+          <Field label="Saldo inicial da carteira (opcional)" hint="Lançado como aporte no caixa do projeto.">
+            <Input name="initial_balance" inputMode="decimal" placeholder="0,00" />
+          </Field>
           {error ? <p className="text-sm text-negative">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button variant="outline" type="button" onClick={() => setOpen(false)}>

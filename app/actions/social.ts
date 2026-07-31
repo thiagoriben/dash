@@ -1,8 +1,59 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, createAdminClient } from "@/lib/supabase/server"
 import { getCurrentProfile } from "@/lib/data"
+
+/* ============================ NOTIFICAÇÕES ============================ */
+
+type NotificationInput = {
+  userId: string
+  type: string
+  title: string
+  body?: string | null
+  link?: string | null
+  data?: Record<string, unknown> | null
+}
+
+/**
+ * Cria notificações para um ou mais usuários. Usa o service role porque o
+ * destinatário normalmente é OUTRO usuário (a RLS de notifications só permite
+ * inserção por admin). O ator já é validado nas actions que chamam isto.
+ */
+async function createNotifications(items: NotificationInput[]) {
+  if (items.length === 0) return
+  const admin = createAdminClient()
+  await admin.from("notifications").insert(
+    items.map((n) => ({
+      user_id: n.userId,
+      type: n.type,
+      title: n.title,
+      body: n.body ?? null,
+      link: n.link ?? null,
+      data: n.data ?? null,
+    })),
+  )
+}
+
+export async function markNotificationRead(id: string) {
+  const supabase = await createClient()
+  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id)
+  revalidatePath("/")
+  return { ok: true }
+}
+
+export async function markAllNotificationsRead() {
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me) return { error: "Sessão expirada." }
+  await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", me.id)
+    .is("read_at", null)
+  revalidatePath("/")
+  return { ok: true }
+}
 
 /* ============================ AMIZADES ============================ */
 
@@ -39,6 +90,15 @@ export async function sendFriendRequest(formData: FormData) {
     // O outro já tinha te enviado: aceita direto.
     if (existing.addressee_id === me.id) {
       await supabase.from("friendships").update({ status: "accepted", updated_at: new Date().toISOString() }).eq("id", existing.id)
+      await createNotifications([
+        {
+          userId: existing.requester_id,
+          type: "friend_accepted",
+          title: "Pedido de amizade aceito",
+          body: `${me.full_name || me.username} aceitou seu pedido de amizade.`,
+          link: "/socios",
+        },
+      ])
       revalidatePath("/socios")
       return { ok: true, accepted: true }
     }
@@ -49,18 +109,44 @@ export async function sendFriendRequest(formData: FormData) {
     .from("friendships")
     .insert({ requester_id: me.id, addressee_id: target.id, status: "pending" })
   if (error) return { error: error.message }
+  await createNotifications([
+    {
+      userId: target.id,
+      type: "friend_request",
+      title: "Novo pedido de amizade",
+      body: `${me.full_name || me.username} quer te adicionar como amigo.`,
+      link: "/socios",
+    },
+  ])
   revalidatePath("/socios")
   return { ok: true }
 }
 
 export async function respondFriendRequest(id: string, accept: boolean) {
   const supabase = await createClient()
+  const me = await getCurrentProfile()
+  const { data: fr } = await supabase
+    .from("friendships")
+    .select("id, requester_id, addressee_id")
+    .eq("id", id)
+    .maybeSingle()
   if (accept) {
     const { error } = await supabase
       .from("friendships")
       .update({ status: "accepted", updated_at: new Date().toISOString() })
       .eq("id", id)
     if (error) return { error: error.message }
+    if (fr?.requester_id && me) {
+      await createNotifications([
+        {
+          userId: fr.requester_id,
+          type: "friend_accepted",
+          title: "Pedido de amizade aceito",
+          body: `${me.full_name || me.username} aceitou seu pedido de amizade.`,
+          link: "/socios",
+        },
+      ])
+    }
   } else {
     const { error } = await supabase.from("friendships").delete().eq("id", id)
     if (error) return { error: error.message }
@@ -114,6 +200,15 @@ export async function requestJoinProject(formData: FormData) {
   if (error) {
     return { error: error.code === "23505" ? "Você já pediu para entrar." : error.message }
   }
+  await createNotifications([
+    {
+      userId: project.owner_id,
+      type: "join_request",
+      title: "Novo pedido para entrar no projeto",
+      body: `${me.full_name || me.username} pediu para entrar em "${project.name}".`,
+      link: `/projetos/${projectId}`,
+    },
+  ])
   revalidatePath("/socios")
   return { ok: true, projectName: project.name }
 }
@@ -124,13 +219,23 @@ export async function respondJoinRequest(id: string, accept: boolean) {
 
   const { data: req } = await supabase
     .from("project_join_requests")
-    .select("id, project_id, user_id, status")
+    .select("id, project_id, user_id, status, projects(name)")
     .eq("id", id)
     .maybeSingle()
   if (!req) return { error: "Pedido não encontrado." }
+  const projectName = (req as any).projects?.name ?? "o projeto"
 
   if (!accept) {
     await supabase.from("project_join_requests").update({ status: "rejected" }).eq("id", id)
+    await createNotifications([
+      {
+        userId: req.user_id,
+        type: "join_response",
+        title: "Pedido de entrada recusado",
+        body: `Seu pedido para entrar em "${projectName}" foi recusado.`,
+        link: "/socios",
+      },
+    ])
     revalidatePath(`/projetos/${req.project_id}`)
     return { ok: true }
   }
@@ -143,7 +248,155 @@ export async function respondJoinRequest(id: string, accept: boolean) {
   if (memberErr && memberErr.code !== "23505") return { error: memberErr.message }
 
   await supabase.from("project_join_requests").update({ status: "accepted" }).eq("id", id)
+  await createNotifications([
+    {
+      userId: req.user_id,
+      type: "join_response",
+      title: "Você entrou no projeto",
+      body: `Seu pedido para entrar em "${projectName}" foi aprovado. Agora você é sócio.`,
+      link: `/projetos/${req.project_id}`,
+    },
+  ])
   revalidatePath(`/projetos/${req.project_id}`)
+  return { ok: true }
+}
+
+/* =================== CONVITE DIRETO A PROJETO (entre amigos) =================== */
+
+/**
+ * O dono/sócio convida um AMIGO (amizade aceita) para um projeto.
+ * Cria um convite pendente + notificação. Ao aceitar, o amigo vira sócio.
+ */
+export async function inviteFriendToProject(projectId: string, friendId: string) {
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me) return { error: "Sessão expirada." }
+  if (friendId === me.id) return { error: "Você já participa deste projeto." }
+
+  // Precisa ser amigo (amizade aceita).
+  const { data: friendship } = await supabase
+    .from("friendships")
+    .select("id")
+    .eq("status", "accepted")
+    .or(
+      `and(requester_id.eq.${me.id},addressee_id.eq.${friendId}),and(requester_id.eq.${friendId},addressee_id.eq.${me.id})`,
+    )
+    .maybeSingle()
+  if (!friendship) return { error: "Você só pode convidar amigos. Adicione-o primeiro." }
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, name, owner_id")
+    .eq("id", projectId)
+    .maybeSingle()
+  if (!project) return { error: "Projeto não encontrado." }
+
+  // Já é membro?
+  const { data: member } = await supabase
+    .from("project_members")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("user_id", friendId)
+    .maybeSingle()
+  if (member) return { error: "Esse amigo já é sócio do projeto." }
+
+  const { error } = await supabase
+    .from("project_invitations")
+    .upsert(
+      { project_id: projectId, inviter_id: me.id, invitee_id: friendId, role: "editor", status: "pending" },
+      { onConflict: "project_id,invitee_id" },
+    )
+  if (error) return { error: error.message }
+
+  await createNotifications([
+    {
+      userId: friendId,
+      type: "project_invite",
+      title: "Convite para um projeto",
+      body: `${me.full_name || me.username} convidou você para "${project.name}".`,
+      link: "/socios",
+    },
+  ])
+  revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/socios")
+  return { ok: true }
+}
+
+export async function respondProjectInvitation(id: string, accept: boolean) {
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me) return { error: "Sessão expirada." }
+
+  const { data: inv } = await supabase
+    .from("project_invitations")
+    .select("id, project_id, inviter_id, invitee_id, role, status, projects(name)")
+    .eq("id", id)
+    .maybeSingle()
+  if (!inv) return { error: "Convite não encontrado." }
+  if (inv.invitee_id !== me.id) return { error: "Este convite não é para você." }
+  const projectName = (inv as any).projects?.name ?? "o projeto"
+
+  if (!accept) {
+    await supabase.from("project_invitations").update({ status: "rejected" }).eq("id", id)
+    revalidatePath("/socios")
+    return { ok: true }
+  }
+
+  const { error: memberErr } = await supabase.from("project_members").insert({
+    project_id: inv.project_id,
+    user_id: me.id,
+    role: inv.role || "editor",
+  })
+  if (memberErr && memberErr.code !== "23505") return { error: memberErr.message }
+
+  await supabase.from("project_invitations").update({ status: "accepted" }).eq("id", id)
+  await createNotifications([
+    {
+      userId: inv.inviter_id,
+      type: "project_invite",
+      title: "Convite aceito",
+      body: `${me.full_name || me.username} aceitou seu convite para "${projectName}".`,
+      link: `/projetos/${inv.project_id}`,
+    },
+  ])
+  revalidatePath("/socios")
+  revalidatePath(`/projetos/${inv.project_id}`)
+  return { ok: true }
+}
+
+/* ============================== FEEDBACK ============================== */
+
+export async function submitFeedback(formData: FormData) {
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me) return { error: "Sessão expirada." }
+
+  const message = String(formData.get("message") ?? "").trim()
+  if (!message) return { error: "Escreva sua mensagem." }
+  const kind = String(formData.get("kind") ?? "bug")
+  const page = String(formData.get("page") ?? "") || null
+
+  const { error } = await supabase.from("feedback").insert({
+    user_id: me.id,
+    kind,
+    message,
+    page,
+    status: "open",
+  })
+  if (error) return { error: error.message }
+
+  // Notifica todos os admins em tempo real.
+  const admin = createAdminClient()
+  const { data: admins } = await admin.from("profiles").select("id").eq("role", "admin")
+  await createNotifications(
+    ((admins ?? []) as { id: string }[]).map((a) => ({
+      userId: a.id,
+      type: "feedback",
+      title: kind === "bug" ? "Novo bug reportado" : "Nova sugestão",
+      body: message.slice(0, 120),
+      link: "/admin/feedback",
+    })),
+  )
   return { ok: true }
 }
 

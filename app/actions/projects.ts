@@ -116,6 +116,25 @@ export async function createProject(formData: FormData) {
     .maybeSingle()
   if (error) return { error: error.message }
 
+  // Carteira do projeto: saldo inicial opcional (aporte) lançado como entrada no caixa.
+  const initialBalance = num(formData.get("initial_balance"))
+  if (created?.id && initialBalance > 0) {
+    await supabase.from("cash_entries").insert({
+      owner_id: profile.id,
+      project_id: created.id,
+      direction: "entrada",
+      amount: initialBalance,
+      currency,
+      category: "Aporte inicial",
+      description: "Saldo inicial da carteira do projeto",
+      occurred_at: new Date().toISOString().slice(0, 10),
+      entry_type: "aporte",
+      to_dashboard: false,
+      dashboard_kind: null,
+      created_by: profile.id,
+    })
+  }
+
   await savePrefs({ region, offer_type: offer_type ?? undefined, currency })
   await logActivity({
     actor: profile,
