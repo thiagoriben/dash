@@ -21,6 +21,7 @@ import {
   PanelLeftOpen,
   LogOut,
   MessageSquare,
+  LayoutGrid,
 } from "lucide-react"
 
 type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }
@@ -35,6 +36,7 @@ const overview: Item[] = [
 const global: Item[] = [
   { href: "/caixa", label: "Caixa", icon: Wallet },
   { href: "/recebiveis", label: "Recebíveis", icon: CalendarClock },
+  { href: "/organizacao", label: "Organização", icon: LayoutGrid },
 ]
 
 export function Sidebar({

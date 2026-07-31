@@ -6,12 +6,16 @@ import { MobileNav } from "@/components/mobile-nav"
 import { AppShell } from "@/components/app-shell"
 import { getCurrentProfile, getPendingProfiles } from "@/lib/data"
 import { getUsdBrlRate } from "@/lib/currency-server"
+import { markDailyAccess } from "@/lib/activity"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [profile, usdBrl] = await Promise.all([getCurrentProfile(), getUsdBrlRate()])
 
   // Gate de aprovação: conta pendente não acessa o app.
   if (profile && !profile.approved) redirect("/aguardando")
+
+  // Marca acesso do dia (no máx. 1x/dia) para alimentar o heatmap do perfil.
+  if (profile?.approved) void markDailyAccess(profile)
 
   const collapsed = profile?.prefs?.sidebar_collapsed ?? false
   const pending = profile?.role === "admin" ? await getPendingProfiles() : []

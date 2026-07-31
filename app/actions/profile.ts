@@ -40,6 +40,24 @@ export async function updateMyProfile(
   return { ok: true }
 }
 
+/** Salva as preferências de participação no ranking de faturamento. */
+export async function updateRankingPrefs(formData: FormData) {
+  const me = await getCurrentProfile()
+  if (!me) return { error: "Sessão expirada." }
+  const prefs: Prefs = {
+    ...(me.prefs ?? {}),
+    ranking_opt_in: formData.get("ranking_opt_in") === "on",
+    ranking_show_name: formData.get("ranking_show_name") === "on",
+    ranking_show_revenue: formData.get("ranking_show_revenue") === "on",
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.from("profiles").update({ prefs }).eq("id", me.id)
+  if (error) return { error: "Não foi possível salvar." }
+  revalidatePath("/perfil")
+  revalidatePath("/ranking")
+  return { ok: true }
+}
+
 /** Salva a cor de destaque do app. */
 export async function updateAccentColor(color: string) {
   const me = await getCurrentProfile()

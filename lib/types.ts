@@ -53,6 +53,25 @@ export type Prefs = {
   recovery_email?: string
   /** Cor de destaque do app (hex). Aplicada globalmente. */
   accent_color?: string
+  /** Cores de badges por chave (ex.: "usd", "br", "latam"). */
+  badge_colors?: Record<string, string>
+  /** Participa do ranking interno de faturamento (opt-in). */
+  ranking_opt_in?: boolean
+  /** Mostra o nome/username no ranking (senão, anônimo). */
+  ranking_show_name?: boolean
+  /** Mostra o valor de faturamento no ranking (senão, oculto). */
+  ranking_show_revenue?: boolean
+  /** Cotações fixas editáveis por par "BRL-USD" -> valor da moeda em BRL. */
+  currency_overrides?: Record<string, number>
+  /** Presets de métricas salvos pelo usuário. */
+  metric_presets?: MetricPreset[]
+}
+
+/** Preset de métricas reutilizável nas dashboards. */
+export type MetricPreset = {
+  id: string
+  name: string
+  metrics: { name: string; kind: MetricKind }[]
 }
 
 /** Como o gasto aparece na dashboard. */
