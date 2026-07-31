@@ -555,18 +555,27 @@ export type ChatMessage = {
   sender_id: string
   body: string
   created_at: string
+  expires_at?: string | null
+  /** Ids de quem já leu (preenchido a partir de chat_reads). */
+  read_by?: string[]
 }
 
-/** Últimas mensagens do chat do projeto (ordem cronológica). */
+/** Últimas mensagens do chat do projeto (ordem cronológica), sem as expiradas. */
 export async function getChatMessages(projectId: string): Promise<ChatMessage[]> {
   const supabase = await createClient()
+  const nowIso = new Date().toISOString()
   const { data } = await supabase
     .from("chat_messages")
-    .select("*")
+    .select("*, chat_reads(user_id)")
     .eq("project_id", projectId)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
     .order("created_at", { ascending: false })
     .limit(100)
-  return ((data ?? []) as ChatMessage[]).reverse()
+  const rows = ((data ?? []) as any[]).map((m) => {
+    const { chat_reads, ...rest } = m
+    return { ...(rest as ChatMessage), read_by: (chat_reads ?? []).map((r: { user_id: string }) => r.user_id) }
+  })
+  return rows.reverse()
 }
 
 /** Pedidos de entrada pendentes num projeto (para o dono aprovar). */

@@ -5,14 +5,30 @@ import { Topbar } from "@/components/topbar"
 import { MobileNav } from "@/components/mobile-nav"
 import { AppShell } from "@/components/app-shell"
 import { BugDetector } from "@/components/bug-detector"
+import { EmailNoticeBanner } from "@/components/email-notice-banner"
 import { getCurrentProfile, getPendingProfiles, getNotifications, getUnreadTotal } from "@/lib/data"
 import { markDailyAccess } from "@/lib/activity"
+import { createClient } from "@/lib/supabase/server"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getCurrentProfile()
 
   // Gate de aprovação: conta pendente não acessa o app.
   if (profile && !profile.approved) redirect("/aguardando")
+
+  // Aviso de email real: só para contas com email fake do Supabase (username@dash.local),
+  // sem email de recuperação cadastrado e que ainda não dispensaram o aviso.
+  let showEmailNotice = false
+  if (profile?.approved) {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const loginEmail = user?.email ?? ""
+    const hasRealEmail = Boolean(profile.prefs?.recovery_email)
+    const dismissed = Boolean(profile.prefs?.email_notice_dismissed)
+    showEmailNotice = loginEmail.endsWith("@dash.local") && !hasRealEmail && !dismissed
+  }
 
   // Marca acesso do dia (no máx. 1x/dia) para alimentar o heatmap do perfil.
   if (profile?.approved) void markDailyAccess(profile)
@@ -46,6 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </Suspense>
       }
       mobileNav={<MobileNav profile={profile} />}
+      banner={showEmailNotice ? <EmailNoticeBanner /> : null}
     >
       {children}
     </AppShell>

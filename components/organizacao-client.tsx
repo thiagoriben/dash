@@ -21,6 +21,7 @@ import { Card, Button, Input, Textarea, Select, Field, Badge } from "@/component
 import { Modal } from "@/components/modal"
 import { RowActions } from "@/components/row-actions"
 import { TodoBoard } from "@/components/todo-board"
+import { MediaPreview, detectMedia } from "@/components/media-preview"
 import { cn } from "@/lib/utils"
 import type { ShortcutCategory, Shortcut, Note, ShortcutKind, TodoItem, Profile } from "@/lib/types"
 import {
@@ -328,6 +329,10 @@ function ShortcutRow({
         ) : shortcut.body ? (
           <p className="line-clamp-2 whitespace-pre-wrap text-xs text-muted">{shortcut.body}</p>
         ) : null}
+        {/* Pré-visualização de imagem/vídeo/YouTube/biblioteca de anúncios */}
+        {detectMedia(shortcut.url) !== "link" ? (
+          <MediaPreview url={shortcut.url} title={shortcut.title} />
+        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {copyText ? (
@@ -362,6 +367,12 @@ function NoteCard({
   onEdit?: () => void
   onDelete?: () => Promise<{ ok?: boolean; error?: string }>
 }) {
+  // Detecta a primeira URL de mídia no corpo da nota para pré-visualizar.
+  const mediaUrl = React.useMemo(() => {
+    const found = (note.body ?? "").match(/https?:\/\/[^\s]+/g) ?? []
+    return found.find((u) => detectMedia(u) !== "link") ?? null
+  }, [note.body])
+
   // Rótulo do badge conforme quem é o dono e o estado de compartilhamento.
   const sharedCount = note.shared_with?.length ?? 0
   const nameOf = (id: string) => friends.find((f) => f.id === id)?.name
@@ -388,6 +399,7 @@ function NoteCard({
       ) : (
         <p className="text-sm text-muted/60">Sem conteúdo.</p>
       )}
+      {mediaUrl ? <MediaPreview url={mediaUrl} title={note.title} /> : null}
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
         {category && (
           <Badge tone="default">
@@ -483,8 +495,12 @@ function ShortcutModal({
   const { pending, error, run } = useFormAction(onClose)
   const edit = state.edit
   const [kind, setKind] = React.useState<ShortcutKind>(edit?.kind ?? "link")
+  const [url, setUrl] = React.useState(edit?.url ?? "")
   React.useEffect(() => {
-    if (state.open) setKind(edit?.kind ?? "link")
+    if (state.open) {
+      setKind(edit?.kind ?? "link")
+      setUrl(edit?.url ?? "")
+    }
   }, [state.open, edit])
   const usesUrl = kind === "link" || kind === "imagem" || kind === "video"
   return (
@@ -519,7 +535,14 @@ function ShortcutModal({
         </div>
         {usesUrl ? (
           <Field label="URL">
-            <Input name="url" type="url" defaultValue={edit?.url ?? ""} placeholder="https://..." />
+            <Input
+              name="url"
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://... (imagem, vídeo, YouTube ou biblioteca de anúncios)"
+            />
+            {detectMedia(url) !== "link" ? <MediaPreview url={url} title="Pré-visualização do atalho" /> : null}
           </Field>
         ) : (
           <input type="hidden" name="url" value="" />

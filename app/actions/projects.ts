@@ -135,6 +135,28 @@ export async function createProject(formData: FormData) {
     })
   }
 
+  // Dois atalhos de exemplo para o projeto começar com conteúdo útil.
+  if (created?.id) {
+    await supabase.from("shortcuts").insert([
+      {
+        owner_id: profile.id,
+        project_id: created.id,
+        title: "Gerenciador de Anúncios",
+        url: "https://business.facebook.com/adsmanager",
+        kind: "link",
+        position: 0,
+      },
+      {
+        owner_id: profile.id,
+        project_id: created.id,
+        title: "Biblioteca de Anúncios (Meta)",
+        url: "https://www.facebook.com/ads/library",
+        kind: "link",
+        position: 1,
+      },
+    ])
+  }
+
   await savePrefs({ region, offer_type: offer_type ?? undefined, currency })
   await logActivity({
     actor: profile,

@@ -490,7 +490,7 @@ export async function setFeedbackStatus(id: string, status: "open" | "resolved")
 
 /* ============================ CHAT ============================ */
 
-export async function sendChatMessage(projectId: string, body: string) {
+export async function sendChatMessage(projectId: string, body: string, ttl: string = DEFAULT_TTL) {
   const supabase = await createClient()
   const me = await getCurrentProfile()
   if (!me) return { error: "Sessão expirada." }
@@ -499,7 +499,20 @@ export async function sendChatMessage(projectId: string, body: string) {
 
   const { error } = await supabase
     .from("chat_messages")
-    .insert({ project_id: projectId, sender_id: me.id, body: text })
+    .insert({ project_id: projectId, sender_id: me.id, body: text, expires_at: expiryFromTtl(ttl) })
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+/** Marca como lidas as mensagens do chat de time que ainda não foram lidas por mim. */
+export async function markChatRead(projectId: string, messageIds: string[]) {
+  if (messageIds.length === 0) return { ok: true }
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me) return { error: "Sessão expirada." }
+  const rows = messageIds.map((id) => ({ message_id: id, user_id: me.id }))
+  // upsert evita duplicar a marcação da mesma mensagem pelo mesmo usuário.
+  const { error } = await supabase.from("chat_reads").upsert(rows, { onConflict: "message_id,user_id" })
   if (error) return { error: error.message }
   return { ok: true }
 }

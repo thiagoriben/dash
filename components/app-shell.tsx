@@ -47,6 +47,7 @@ export function AppShell({
           <div className={cn("transition-[padding] duration-200", collapsed ? "md:pl-16" : "md:pl-60")}>
             {topbar}
             {mobileNav}
+            {banner}
             <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">{children}</main>
           </div>
         </div>
