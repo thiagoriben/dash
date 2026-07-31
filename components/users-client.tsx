@@ -1,15 +1,16 @@
 "use client"
 
-import { useActionState, useState, useTransition } from "react"
+import { useActionState, useEffect, useState, useTransition } from "react"
 import { Card, Button, Input, Select, Badge } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { createUser, updateUserRole, deleteUser } from "@/app/actions/users"
 import type { Profile } from "@/lib/types"
 import { fmtDate } from "@/lib/finance"
-import { UserPlus, Trash2 } from "lucide-react"
+import { UserPlus, Trash2, Radio } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 export function UsersClient({
-  profiles,
+  profiles: initialProfiles,
   currentUserId,
 }: {
   profiles: Profile[]
@@ -18,6 +19,47 @@ export function UsersClient({
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(createUser, undefined)
   const [, startTransition] = useTransition()
+  const [profiles, setProfiles] = useState<Profile[]>(initialProfiles)
+  const [live, setLive] = useState(false)
+
+  useEffect(() => setProfiles(initialProfiles), [initialProfiles])
+
+  // Admin em tempo real: novos cadastros, mudanças de papel e remoções
+  // aparecem na lista sem recarregar a página.
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel("admin-profiles")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        (payload) => {
+          setProfiles((prev) => {
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as Profile
+              if (prev.some((p) => p.id === row.id)) return prev
+              return [row, ...prev]
+            }
+            if (payload.eventType === "UPDATE") {
+              const row = payload.new as Profile
+              return prev.map((p) => (p.id === row.id ? { ...p, ...row } : p))
+            }
+            if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as { id: string }
+              return prev.filter((p) => p.id !== oldRow.id)
+            }
+            return prev
+          })
+        },
+      )
+      .subscribe((status, err) => {
+        console.log("[v0] admin-profiles channel status:", status, err ?? "")
+        setLive(status === "SUBSCRIBED")
+      })
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [])
 
   // fecha o modal ao criar com sucesso
   if (state?.ok && open) setOpen(false)
@@ -27,8 +69,13 @@ export function UsersClient({
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-semibold">Usuários</h1>
-          <p className="text-sm text-muted">
+          <p className="flex items-center gap-2 text-sm text-muted">
             Crie contas de acesso por usuário e senha e defina permissões.
+            {live && (
+              <span className="inline-flex items-center gap-1 text-xs text-positive">
+                <Radio size={12} className="animate-pulse" /> ao vivo
+              </span>
+            )}
           </p>
         </div>
         <Button onClick={() => setOpen(true)}>
@@ -141,7 +188,7 @@ function RoleSelect({
   return (
     <Select
       className="h-8 w-36 py-0 text-xs"
-      defaultValue={role}
+      value={role}
       disabled={disabled}
       onChange={(e) => {
         const v = e.target.value
