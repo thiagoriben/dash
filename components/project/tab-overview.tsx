@@ -60,6 +60,10 @@ export function TabOverview({
   const [error, setError] = useState<string>()
   const [view, setView] = useState<SpendView>(initialView)
   const [base, setBase] = useState<ProfitBase>(initialBase)
+  // Data selecionada no modal de métricas. O formulário reflete o registro desse dia,
+  // ficando em sincronia com os números que a dashboard já mostra.
+  const [metricDate, setMetricDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const dayMetric = useMemo(() => metrics.find((m) => m.date === metricDate) ?? null, [metrics, metricDate])
   const router = useRouter()
 
   const breakdown = useMemo(
@@ -128,7 +132,15 @@ export function TabOverview({
             <option value="ads">Lucro s/ anúncios</option>
             <option value="card">Lucro c/ imposto</option>
           </Select>
-          <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setMetricDate(new Date().toISOString().slice(0, 10))
+              setError(undefined)
+              setOpen(true)
+            }}
+          >
             <Plus size={16} />
             Métricas
           </Button>
@@ -139,7 +151,7 @@ export function TabOverview({
         {widgetKeys.map((k) => {
           const w = buildWidget(k, breakdown, view, base)
           if (!w) return null
-          return <KpiCard key={k} label={w.label} value={w.value} hint={w.hint ?? undefined} accent={w.accent} />
+          return <KpiCard key={k} label={w.label} value={w.value} hint={w.hint ?? undefined} info={w.desc} accent={w.accent} />
         })}
       </div>
 
@@ -190,32 +202,44 @@ export function TabOverview({
         </Card>
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Atualizar métricas do dia" description="Opcional. Preencha só o que quiser — um registro por data, reenviar atualiza os valores.">
-        <form action={onSubmit} className="flex flex-col gap-4">
-          <Field label="Data">
-            <Input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Atualizar métricas do dia"
+        description="Reflete o dia selecionado — os campos já vêm com os valores atuais da dashboard. Reenviar atualiza."
+      >
+        {/* key força o form a repopular quando a data muda (inputs não-controlados). */}
+        <form key={metricDate} action={onSubmit} className="flex flex-col gap-4">
+          <Field label="Data" hint={dayMetric ? "Já existe registro neste dia — os campos abaixo mostram os valores salvos." : "Sem registro ainda neste dia."}>
+            <Input
+              name="date"
+              type="date"
+              value={metricDate}
+              onChange={(e) => setMetricDate(e.target.value)}
+              required
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={`Gasto (${project.currency})`}>
-              <Input name="spend" inputMode="decimal" placeholder="0,00" />
+              <Input name="spend" inputMode="decimal" placeholder="0,00" defaultValue={dayMetric?.spend ? String(dayMetric.spend) : ""} />
             </Field>
             <Field label={`Faturamento (${project.currency})`}>
-              <Input name="revenue" inputMode="decimal" placeholder="0,00" />
+              <Input name="revenue" inputMode="decimal" placeholder="0,00" defaultValue={dayMetric?.revenue ? String(dayMetric.revenue) : ""} />
             </Field>
             <Field label="Impressões">
-              <Input name="impressions" inputMode="numeric" placeholder="0" />
+              <Input name="impressions" inputMode="numeric" placeholder="0" defaultValue={dayMetric?.impressions ? String(dayMetric.impressions) : ""} />
             </Field>
             <Field label="Cliques">
-              <Input name="clicks" inputMode="numeric" placeholder="0" />
+              <Input name="clicks" inputMode="numeric" placeholder="0" defaultValue={dayMetric?.clicks ? String(dayMetric.clicks) : ""} />
             </Field>
             <Field label="Visualizações de página">
-              <Input name="page_views" inputMode="numeric" placeholder="0" />
+              <Input name="page_views" inputMode="numeric" placeholder="0" defaultValue={dayMetric?.page_views ? String(dayMetric.page_views) : ""} />
             </Field>
             <Field label="Checkouts iniciados (IC)">
-              <Input name="checkouts_initiated" inputMode="numeric" placeholder="0" />
+              <Input name="checkouts_initiated" inputMode="numeric" placeholder="0" defaultValue={dayMetric?.checkouts_initiated ? String(dayMetric.checkouts_initiated) : ""} />
             </Field>
             <Field label="Vendas">
-              <Input name="sales" inputMode="numeric" placeholder="0" />
+              <Input name="sales" inputMode="numeric" placeholder="0" defaultValue={dayMetric?.sales ? String(dayMetric.sales) : ""} />
             </Field>
           </div>
           {error ? <p className="text-sm text-negative">{error}</p> : null}

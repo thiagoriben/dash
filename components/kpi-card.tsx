@@ -1,11 +1,12 @@
 import { cn } from "@/lib/utils"
 import { Sparkline } from "./sparkline"
-import { TrendingUp, TrendingDown } from "lucide-react"
+import { TrendingUp, TrendingDown, HelpCircle } from "lucide-react"
 
 export function KpiCard({
   label,
   value,
   hint,
+  info,
   delta,
   trend,
   icon,
@@ -14,6 +15,8 @@ export function KpiCard({
   label: string
   value: string
   hint?: string
+  /** Explicação curta exibida como tooltip de ajuda ao lado do rótulo. */
+  info?: string
   delta?: number
   trend?: number[]
   icon?: React.ReactNode
@@ -31,9 +34,14 @@ export function KpiCard({
   return (
     <div className="glass glass-hover rounded-2xl p-5">
       <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
+        <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted">
           {icon ? <span className={accentColor}>{icon}</span> : null}
           {label}
+          {info ? (
+            <span title={info} className="cursor-help text-muted/70 transition-colors hover:text-foreground" aria-label={info}>
+              <HelpCircle size={13} />
+            </span>
+          ) : null}
         </div>
         {typeof delta === "number" ? (
           <span

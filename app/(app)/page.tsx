@@ -168,6 +168,7 @@ export default async function DashboardPage({
                   label={w.label}
                   value={w.value}
                   hint={w.hint ?? undefined}
+                  info={w.desc}
                   trend={trendFor(k)}
                   accent={w.accent}
                 />

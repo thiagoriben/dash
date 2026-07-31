@@ -23,7 +23,25 @@ export type WidgetDef = {
   value: string
   /** Valor discreto exibido ao lado (ex.: imposto embutido no gasto). */
   hint?: string | null
+  /** Explicação curta da métrica (tooltip de ajuda). */
+  desc?: string
   accent: "primary" | "positive" | "negative" | "warning" | "secondary"
+}
+
+/** Descrições curtas por métrica — instruem siglas/nomes abreviados. */
+export const WIDGET_DESCRIPTIONS: Record<WidgetKey, string> = {
+  spend: "Total investido em anúncios no período (conforme a visão de gasto escolhida).",
+  revenue: "Faturamento já descontado de taxas e impostos das vendas.",
+  profit: "O que sobra após gastos, taxas e impostos — o lucro de fato.",
+  roas: "Retorno sobre o investimento em anúncios. Ex.: 2x = fatura o dobro do que gastou.",
+  cpa: "Custo por aquisição: quanto, em média, custou cada venda.",
+  ticket: "Ticket médio: faturamento dividido pelo número de vendas.",
+  trafficTax: "Imposto estimado sobre o gasto com tráfego (ex.: imposto da Meta).",
+  gatewayFees: "Taxas cobradas pelo gateway de pagamento sobre as vendas.",
+  salesTax: "Impostos incidentes sobre o faturamento das vendas.",
+  otherSpend: "Demais gastos lançados no caixa que não são anúncios.",
+  margin: "Margem líquida: quanto do faturamento vira lucro, em %.",
+  sales: "Quantidade de vendas no período.",
 }
 
 /** Widgets padrão da dashboard principal (na ordem exibida). */
@@ -54,6 +72,15 @@ export const WIDGET_LABELS: Record<WidgetKey, string> = {
 
 /** Constrói a definição de um widget a partir do breakdown consolidado. */
 export function buildWidget(
+  key: WidgetKey,
+  b: MoneyBreakdown,
+  view: SpendView,
+  base: ProfitBase,
+): WidgetDef {
+  return { ...buildWidgetBase(key, b, view, base), desc: WIDGET_DESCRIPTIONS[key] }
+}
+
+function buildWidgetBase(
   key: WidgetKey,
   b: MoneyBreakdown,
   view: SpendView,

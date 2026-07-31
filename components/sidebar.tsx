@@ -102,23 +102,23 @@ export function Sidebar({
         <NavGroup items={organizacao} pathname={pathname} collapsed={collapsed} />
         <NavLabel collapsed={collapsed}>Ferramentas</NavLabel>
         <NavGroup items={ferramentas} pathname={pathname} collapsed={collapsed} />
-        {admin.length > 0 && (
+        <NavLabel collapsed={collapsed}>Ajustes</NavLabel>
+        <NavGroup items={config} pathname={pathname} collapsed={collapsed} />
+        {isAdmin && (
           <>
             <NavLabel collapsed={collapsed}>
               <span className="inline-flex items-center gap-1">
                 <ShieldCheck size={12} /> Admin
               </span>
             </NavLabel>
+            {/* Aprovações de novas contas — função de admin, agrupada aqui. */}
+            <ApprovalsButton pending={pending} collapsed={collapsed} />
             <NavGroup items={admin} pathname={pathname} collapsed={collapsed} />
           </>
         )}
-        <NavLabel collapsed={collapsed}>Ajustes</NavLabel>
-        <NavGroup items={config} pathname={pathname} collapsed={collapsed} />
       </nav>
 
       <div className="flex flex-col gap-2 border-t border-[color:var(--color-border)] p-3">
-        {isAdmin && <ApprovalsButton pending={pending} collapsed={collapsed} />}
-
         <CurrencyPopover
           usdBrl={usdBrl}
           currencies={fxCurrencies}
