@@ -194,6 +194,8 @@ export type Sale = {
   product_id: string | null
   creative_id: string | null
   gateway_id: string | null
+  /** Conta de anúncio vinculada à venda (opcional). */
+  ad_account_id: string | null
   gross_amount: number
   apply_gateway_fee: boolean
   fee_amount: number
@@ -208,6 +210,30 @@ export type Sale = {
   notes: string | null
   created_by: string | null
   created_at: string
+  /** Itens (produtos) da venda — carregado sob demanda em edições/listagens. */
+  items?: SaleItem[]
+}
+
+/** Rótulo de um produto dentro de uma venda. */
+export type SaleItemRole = "front" | "order_bump" | "upsell" | "downsell"
+
+/** Um produto vendido dentro de uma venda (venda multi-produto). */
+export type SaleItem = {
+  id: string
+  sale_id: string
+  product_id: string | null
+  role: SaleItemRole
+  gross_amount: number
+  quantity: number
+  created_at: string
+}
+
+/** Rótulos legíveis dos itens de venda. */
+export const SALE_ITEM_ROLE_LABELS: Record<SaleItemRole, string> = {
+  front: "Front",
+  order_bump: "Order bump",
+  upsell: "Upsell",
+  downsell: "Downsell",
 }
 
 export type AdAccount = {

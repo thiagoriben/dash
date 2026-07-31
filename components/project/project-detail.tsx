@@ -290,6 +290,7 @@ export function ProjectDetail(props: {
             products={props.products}
             creatives={props.creatives}
             gateways={props.gateways}
+            adAccounts={props.adAccounts}
             prefs={props.prefs}
           />
         )}
@@ -308,7 +309,12 @@ export function ProjectDetail(props: {
           />
         )}
         {tab === "Criativos" && (
-          <TabCreatives project={project} creatives={props.creatives} products={props.products} />
+          <TabCreatives
+            project={project}
+            creatives={props.creatives}
+            products={props.products}
+            sales={props.sales}
+          />
         )}
         {tab === "Contas de anúncio" && (
           <TabAdAccounts

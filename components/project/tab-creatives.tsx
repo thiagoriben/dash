@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { Creative, Product, Project } from "@/lib/types"
+import type { Creative, Product, Project, Sale } from "@/lib/types"
 import { formatCurrency, formatNumber, safeDiv } from "@/lib/utils"
 import { creativeSemaphore } from "@/lib/finance"
 import { Card, CardContent, Button, Field, Input, Select } from "@/components/ui"
@@ -33,16 +33,29 @@ export function TabCreatives({
   project,
   creatives,
   products,
+  sales = [],
 }: {
   project: Project
   creatives: Creative[]
   products: Product[]
+  /** Vendas do projeto — usadas para atualizar vendas/faturamento reais de cada criativo. */
+  sales?: Sale[]
 }) {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Creative | null>(null)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string>()
   const router = useRouter()
+
+  // Agrega as vendas reais por criativo (quantidade e faturamento bruto).
+  const salesByCreative = new Map<string, { count: number; revenue: number }>()
+  for (const s of sales) {
+    if (!s.creative_id) continue
+    const cur = salesByCreative.get(s.creative_id) ?? { count: 0, revenue: 0 }
+    cur.count += 1
+    cur.revenue += s.gross_amount || 0
+    salesByCreative.set(s.creative_id, cur)
+  }
 
   // orçamento de teste sugerido = margem do front-end * 1.75
   const front = products.find((f) => f.kind === "front")
@@ -97,8 +110,12 @@ export function TabCreatives({
           </Card>
         ) : (
           creatives.map((c) => {
-            const roasVal = safeDiv(c.revenue, c.spend)
-            const light = creativeSemaphore(c.spend, c.sales, cpaTarget, testBudget)
+            // Vendas/faturamento reais (das vendas vinculadas) têm prioridade sobre os valores manuais.
+            const real = salesByCreative.get(c.id)
+            const salesCount = real ? real.count : c.sales
+            const revenue = real ? real.revenue : c.revenue
+            const roasVal = safeDiv(revenue, c.spend)
+            const light = creativeSemaphore(c.spend, salesCount, cpaTarget, testBudget)
             return (
               <Card key={c.id}>
                 <CardContent className="flex flex-col gap-3 p-4">
@@ -119,7 +136,7 @@ export function TabCreatives({
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <Stat label="Gasto" value={formatCurrency(c.spend, project.currency)} />
-                    <Stat label="Vendas" value={formatNumber(c.sales)} />
+                    <Stat label="Vendas" value={formatNumber(salesCount)} hint={real ? "auto" : undefined} />
                     <Stat label="ROAS" value={`${formatNumber(roasVal, 2)}x`} />
                   </div>
                   <div className="flex items-center justify-between border-t border-[color:var(--color-border)] pt-2">
@@ -137,7 +154,7 @@ export function TabCreatives({
                         <option key={s.value} value={s.value}>{s.label}</option>
                       ))}
                     </Select>
-                    <span className="font-mono text-sm">{formatCurrency(c.revenue, project.currency)}</span>
+                    <span className="font-mono text-sm">{formatCurrency(revenue, project.currency)}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -191,10 +208,13 @@ export function TabCreatives({
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-lg border border-[color:var(--color-border)] bg-white/[0.02] p-2">
-      <div className="text-[10px] uppercase tracking-wide text-muted">{label}</div>
+      <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wide text-muted">
+        {label}
+        {hint ? <span className="rounded bg-primary/15 px-1 text-[8px] text-primary">{hint}</span> : null}
+      </div>
       <div className="font-mono text-sm">{value}</div>
     </div>
   )

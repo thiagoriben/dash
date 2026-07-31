@@ -23,8 +23,11 @@ export function SelectOrOther({
   emptyLabel?: string
 }) {
   const initial = defaultValue ?? (allowEmpty ? "" : options[0] ?? "")
-  const initialIsKnown = initial === "" || options.includes(initial)
-  const [sel, setSel] = useState(initialIsKnown ? initial : "__other__")
+  // Casa de forma case-insensitive para reaproveitar valores legados salvos em minúsculo
+  // (ex.: "facebook ads" cai na opção canônica "Facebook Ads" em vez de "Outro").
+  const canonical = options.find((o) => o.toLowerCase() === initial.toLowerCase())
+  const initialIsKnown = initial === "" || Boolean(canonical)
+  const [sel, setSel] = useState(initial === "" ? "" : (canonical ?? "__other__"))
   const [other, setOther] = useState(initialIsKnown ? "" : initial)
 
   const value = sel === "__other__" ? other : sel

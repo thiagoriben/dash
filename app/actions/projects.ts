@@ -24,11 +24,51 @@ export async function saveListPref(
   key: "regions" | "currencies" | "offer_types" | "sources",
   values: string[],
 ) {
-  const clean = [...new Set(values.map((v) => v.trim().toLowerCase()).filter(Boolean))]
+  // "sources" preserva a caixa digitada (ex.: "Facebook Ads") para casar com as opções do
+  // seletor e evitar duplicatas em minúsculo. As demais listas seguem normalizadas em minúsculo.
+  const preserveCase = key === "sources"
+  const seen = new Set<string>()
+  const clean: string[] = []
+  for (const raw of values) {
+    const v = preserveCase ? raw.trim() : raw.trim().toLowerCase()
+    if (!v) continue
+    const dedupeKey = v.toLowerCase()
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+    clean.push(v)
+  }
   await savePrefs({ [key]: clean })
   revalidatePath("/config")
+  revalidatePath("/perfil")
   revalidatePath("/projetos")
   return { ok: true }
+}
+
+/** Rótulos válidos de item de venda. */
+const SALE_ITEM_ROLES = ["front", "order_bump", "upsell", "downsell"] as const
+
+/** Interpreta os itens de venda (multi-produto) enviados como JSON no formulário. */
+function parseSaleItems(raw: FormDataEntryValue | null): {
+  product_id: string | null
+  role: (typeof SALE_ITEM_ROLES)[number]
+  gross_amount: number
+  quantity: number
+}[] {
+  if (!raw) return []
+  try {
+    const arr = JSON.parse(String(raw))
+    if (!Array.isArray(arr)) return []
+    return arr
+      .map((it) => ({
+        product_id: it.product_id ? String(it.product_id) : null,
+        role: SALE_ITEM_ROLES.includes(it.role) ? it.role : "front",
+        gross_amount: Number(it.gross_amount) || 0,
+        quantity: Math.max(1, Number.parseInt(String(it.quantity ?? 1), 10) || 1),
+      }))
+      .filter((it) => it.product_id || it.gross_amount > 0)
+  } catch {
+    return []
+  }
 }
 
 export async function setSidebarCollapsed(collapsed: boolean) {
@@ -573,7 +613,10 @@ export async function createSale(projectId: string, formData: FormData) {
   const productId = String(formData.get("product_id") ?? "") || null
   const creativeId = String(formData.get("creative_id") ?? "") || null
   const paymentMethod = String(formData.get("payment_method") ?? "pix")
-  const source = String(formData.get("source") ?? "").toLowerCase() || null
+  // Mantém o texto exato da origem (ex.: "Facebook Ads") para casar com as opções e evitar
+  // duplicatas em minúsculo no seletor "Outro".
+  const source = String(formData.get("source") ?? "").trim() || null
+  const adAccountId = String(formData.get("ad_account_id") ?? "") || null
   const soldAt = String(formData.get("sold_at") ?? new Date().toISOString().slice(0, 10))
 
   // taxa + prazos do gateway
@@ -608,6 +651,7 @@ export async function createSale(projectId: string, formData: FormData) {
       product_id: productId,
       creative_id: creativeId,
       gateway_id: gatewayId,
+      ad_account_id: adAccountId,
       gross_amount: gross,
       apply_gateway_fee: applyFee,
       fee_amount: fee,
@@ -625,6 +669,16 @@ export async function createSale(projectId: string, formData: FormData) {
     .select("id")
     .maybeSingle()
   if (error) return { error: error.message }
+
+  // Itens da venda (multi-produto). Chega como JSON serializado no campo "items".
+  if (sale) {
+    const items = parseSaleItems(formData.get("items"))
+    if (items.length > 0) {
+      await supabase
+        .from("sale_items")
+        .insert(items.map((it) => ({ ...it, sale_id: sale.id })))
+    }
+  }
 
   // Entrada no caixa apenas quando o dinheiro já entrou (venda sem prazo/recebida)
   if (sale && !hasTerm) {
@@ -654,6 +708,96 @@ export async function createSale(projectId: string, formData: FormData) {
     projectId,
     summary: `Registrou venda de ${gross.toFixed(2)}${hasTerm ? ` (recebe em ${receivableDate})` : ""}`,
     meta: { gross, net, method: paymentMethod },
+  })
+  revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/")
+  revalidatePath("/caixa")
+  revalidatePath("/recebiveis")
+  return { ok: true }
+}
+
+/** Edita uma venda existente, recalculando taxas/impostos e regravando os itens. */
+export async function updateSale(projectId: string, saleId: string, formData: FormData) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: "Não autenticado." }
+
+  const gross = num(formData.get("gross_amount"))
+  if (gross <= 0) return { error: "Informe o valor da venda." }
+
+  const applyFee = checkbox(formData, "apply_gateway_fee")
+  const gatewayId = String(formData.get("gateway_id") ?? "") || null
+  const productId = String(formData.get("product_id") ?? "") || null
+  const creativeId = String(formData.get("creative_id") ?? "") || null
+  const adAccountId = String(formData.get("ad_account_id") ?? "") || null
+  const paymentMethod = String(formData.get("payment_method") ?? "pix")
+  const source = String(formData.get("source") ?? "").trim() || null
+  const soldAt = String(formData.get("sold_at") ?? new Date().toISOString().slice(0, 10))
+
+  let feePct = 0
+  let feeFixed = 0
+  let gwTerms: { term_days_pix: number; term_days_card: number } | null = null
+  if (gatewayId) {
+    const { data: gw } = await supabase
+      .from("payment_gateways")
+      .select("fee_pct, fee_fixed, term_days_pix, term_days_card")
+      .eq("id", gatewayId)
+      .maybeSingle()
+    feePct = gw?.fee_pct ?? 0
+    feeFixed = gw?.fee_fixed ?? 0
+    gwTerms = gw ? { term_days_pix: gw.term_days_pix, term_days_card: gw.term_days_card } : null
+  }
+  const { data: proj } = await supabase.from("projects").select("tax_pct").eq("id", projectId).maybeSingle()
+  const taxPct = proj?.tax_pct ?? 0
+
+  const { fee, tax, net } = computeSaleNet({ gross, applyFee, feePct, feeFixed, taxPct })
+  const { date: receivableDate, hasTerm } = receivableDateFor(soldAt, paymentMethod, gwTerms)
+
+  const { error } = await supabase
+    .from("sales")
+    .update({
+      product_id: productId,
+      creative_id: creativeId,
+      gateway_id: gatewayId,
+      ad_account_id: adAccountId,
+      gross_amount: gross,
+      apply_gateway_fee: applyFee,
+      fee_amount: fee,
+      tax_amount: tax,
+      net_amount: net,
+      payment_method: paymentMethod,
+      source,
+      sold_at: soldAt,
+      has_term: hasTerm,
+      receivable_date: receivableDate,
+      notes: String(formData.get("notes") ?? "") || null,
+    })
+    .eq("id", saleId)
+  if (error) return { error: error.message }
+
+  // Regrava os itens: apaga os antigos e insere os novos.
+  await supabase.from("sale_items").delete().eq("sale_id", saleId)
+  const items = parseSaleItems(formData.get("items"))
+  if (items.length > 0) {
+    await supabase.from("sale_items").insert(items.map((it) => ({ ...it, sale_id: saleId })))
+  }
+
+  // Sincroniza a entrada de caixa vinculada (quando existir) com o novo valor líquido.
+  await supabase.from("cash_entries").update({ amount: net }).eq("sale_id", saleId)
+
+  await savePrefs({
+    payment_method: paymentMethod,
+    source: source ?? undefined,
+    gateway_id: gatewayId ?? undefined,
+  })
+  await logActivity({
+    actor: profile,
+    action: "update",
+    entity: "sale",
+    entityId: saleId,
+    projectId,
+    summary: `Editou venda (${gross.toFixed(2)})`,
+    meta: { gross, net },
   })
   revalidatePath(`/projetos/${projectId}`)
   revalidatePath("/")

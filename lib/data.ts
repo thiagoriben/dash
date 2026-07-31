@@ -244,7 +244,8 @@ export async function getSales(
 ): Promise<Sale[]> {
   if (projectIds.length === 0) return []
   const supabase = await createClient()
-  let q = supabase.from("sales").select("*").in("project_id", projectIds)
+  // Traz os itens (multi-produto) embutidos em cada venda.
+  let q = supabase.from("sales").select("*, items:sale_items(*)").in("project_id", projectIds)
   if (start) q = q.gte("sold_at", start)
   if (end) q = q.lte("sold_at", end)
   const { data } = await q.order("sold_at", { ascending: false })
