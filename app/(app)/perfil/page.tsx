@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getCurrentProfile } from "@/lib/data"
+import { getActivityByDay } from "@/lib/activity"
 import { PerfilClient } from "@/components/perfil-client"
 
 export const dynamic = "force-dynamic"
@@ -13,6 +14,8 @@ export default async function PerfilPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  const activity = await getActivityByDay(profile.id, 133)
 
   const [ownedRes, collabRes, friendsRes] = await Promise.all([
     supabase.from("projects").select("id", { count: "exact", head: true }).eq("owner_id", profile.id),
@@ -35,5 +38,5 @@ export default async function PerfilPage() {
     lastSignIn: user?.last_sign_in_at ?? null,
   }
 
-  return <PerfilClient profile={profile} stats={stats} />
+  return <PerfilClient profile={profile} stats={stats} activity={activity} />
 }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { CardCharge, CashEntry, CustomMetric, DailyMetric, Expense, Project, Sale, SpendView, ProfitBase } from "@/lib/types"
+import type { CardCharge, CashEntry, CustomMetric, DailyMetric, Expense, Project, Sale, SpendView, ProfitBase, MetricPreset } from "@/lib/types"
 import { CustomMetricsSection } from "@/components/custom-metrics-section"
 import { timeSeries } from "@/lib/aggregate"
 import { buildBreakdown } from "@/lib/money"
@@ -39,6 +39,7 @@ export function TabOverview({
   metaTaxPct = 0,
   widgets,
   customMetrics = [],
+  metricPresets = [],
 }: {
   project: Project
   metrics: DailyMetric[]
@@ -52,6 +53,7 @@ export function TabOverview({
   metaTaxPct?: number
   widgets?: string[]
   customMetrics?: CustomMetric[]
+  metricPresets?: MetricPreset[]
 }) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -145,6 +147,7 @@ export function TabOverview({
         metrics={customMetrics}
         projectId={project.id}
         isX1={(project.offer_type ?? "").toLowerCase() === "x1"}
+        presets={metricPresets}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

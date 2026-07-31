@@ -3,8 +3,10 @@
 import { useActionState, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useFormStatus } from "react-dom"
-import { updateMyProfile, updateAccentColor } from "@/app/actions/profile"
+import { updateMyProfile, updateAccentColor, updateRankingPrefs } from "@/app/actions/profile"
 import { changePassword } from "@/app/actions/auth"
+import { ActivityHeatmap } from "@/components/activity-heatmap"
+import type { DayCount } from "@/lib/activity"
 import {
   Button,
   Card,
@@ -30,6 +32,8 @@ import {
   Palette,
   Globe,
   Lock,
+  Activity,
+  Trophy,
 } from "lucide-react"
 
 type Stats = {
@@ -66,13 +70,30 @@ function fmtDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
 }
 
-export function PerfilClient({ profile, stats }: { profile: Profile; stats: Stats }) {
+export function PerfilClient({
+  profile,
+  stats,
+  activity = [],
+}: {
+  profile: Profile
+  stats: Stats
+  activity?: DayCount[]
+}) {
   const router = useRouter()
   const [dataState, dataAction] = useActionState(updateMyProfile, {})
   const [pwState, pwAction] = useActionState(changePassword, {})
   const [copied, setCopied] = useState(false)
   const [color, setColor] = useState(profile.prefs?.accent_color ?? "#29f57e")
   const [savingColor, startColor] = useTransition()
+  const [rankOptIn, setRankOptIn] = useState(profile.prefs?.ranking_opt_in ?? false)
+  const [savingRank, startRank] = useTransition()
+
+  function saveRanking(form: FormData) {
+    startRank(async () => {
+      await updateRankingPrefs(form)
+      router.refresh()
+    })
+  }
 
   function copyId() {
     navigator.clipboard.writeText(profile.id)
@@ -295,6 +316,88 @@ export function PerfilClient({ profile, stats }: { profile: Profile; stats: Stat
             </label>
             {savingColor ? <span className="text-xs text-muted">Salvando…</span> : null}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Atividade */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity size={18} className="text-accent" />
+            Atividade
+          </CardTitle>
+          <CardDescription>Seus dias de uso do app. Quanto mais ações, mais forte a cor.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ActivityHeatmap data={activity} />
+        </CardContent>
+      </Card>
+
+      {/* Ranking */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trophy size={18} className="text-accent" />
+            Ranking de faturamento
+          </CardTitle>
+          <CardDescription>
+            Por padrão você fica fora do ranking. Participe e escolha o que exibir.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={saveRanking} className="flex flex-col gap-3">
+            <label className="flex items-center gap-3 rounded-xl border border-border bg-surface-2 px-3 py-2.5">
+              <input
+                type="checkbox"
+                name="ranking_opt_in"
+                checked={rankOptIn}
+                onChange={(e) => setRankOptIn(e.target.checked)}
+                className="h-4 w-4 accent-[var(--brand)]"
+              />
+              <span className="text-sm">
+                Participar do ranking
+                <span className="block text-xs text-muted">Seu faturamento entra na disputa mensal.</span>
+              </span>
+            </label>
+            <label
+              className="flex items-center gap-3 rounded-xl border border-border bg-surface-2 px-3 py-2.5 data-[off=true]:opacity-40"
+              data-off={!rankOptIn}
+            >
+              <input
+                type="checkbox"
+                name="ranking_show_name"
+                defaultChecked={profile.prefs?.ranking_show_name ?? true}
+                disabled={!rankOptIn}
+                className="h-4 w-4 accent-[var(--brand)]"
+              />
+              <span className="text-sm">
+                Mostrar meu nome
+                <span className="block text-xs text-muted">Se desligado, apareço como anônimo.</span>
+              </span>
+            </label>
+            <label
+              className="flex items-center gap-3 rounded-xl border border-border bg-surface-2 px-3 py-2.5 data-[off=true]:opacity-40"
+              data-off={!rankOptIn}
+            >
+              <input
+                type="checkbox"
+                name="ranking_show_revenue"
+                defaultChecked={profile.prefs?.ranking_show_revenue ?? true}
+                disabled={!rankOptIn}
+                className="h-4 w-4 accent-[var(--brand)]"
+              />
+              <span className="text-sm">
+                Mostrar meu faturamento
+                <span className="block text-xs text-muted">Se desligado, o valor fica oculto no ranking.</span>
+              </span>
+            </label>
+            <div>
+              <Button type="submit" variant="outline" disabled={savingRank}>
+                <Trophy size={16} />
+                {savingRank ? "Salvando…" : "Salvar preferências"}
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>

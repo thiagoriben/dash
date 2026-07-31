@@ -230,6 +230,7 @@ export function ProjectDetail(props: {
               metaTaxPct={props.prefs?.meta_tax_pct ?? 0}
               widgets={props.prefs?.project_widgets}
               customMetrics={props.customMetrics}
+              metricPresets={props.prefs?.metric_presets ?? []}
             />
           )}
         {tab === "Caixa" && (

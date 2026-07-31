@@ -175,7 +175,11 @@ export default async function DashboardPage({
             })}
           </div>
 
-          <CustomMetricsSection metrics={customMetrics} projectId={null} />
+          <CustomMetricsSection
+            metrics={customMetrics}
+            projectId={null}
+            presets={profile.prefs?.metric_presets ?? []}
+          />
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Card className="lg:col-span-2">

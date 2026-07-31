@@ -22,6 +22,7 @@ import {
   LogOut,
   MessageSquare,
   LayoutGrid,
+  Trophy,
 } from "lucide-react"
 
 type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }
@@ -32,6 +33,7 @@ const overview: Item[] = [
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
   { href: "/socios", label: "Sócios", icon: Users },
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/ranking", label: "Ranking", icon: Trophy },
 ]
 const global: Item[] = [
   { href: "/caixa", label: "Caixa", icon: Wallet },
