@@ -74,8 +74,10 @@ export async function signUp(
     return { error: "Usuário inválido (mín. 3 caracteres, sem espaços)." }
   if (password.length < 6) return { error: "A senha precisa de ao menos 6 caracteres." }
   if (password !== confirm) return { error: "As senhas não conferem." }
-  if (recoveryEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recoveryEmail))
-    return { error: "Email de recuperação inválido." }
+  // Email agora é obrigatório para contas novas (contas antigas seguem sem).
+  if (!recoveryEmail) return { error: "Informe um email válido." }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recoveryEmail))
+    return { error: "Email inválido." }
 
   const admin = createAdminClient()
 
@@ -118,7 +120,7 @@ export async function signUp(
         username,
         role: isFirst ? "admin" : "member",
         approved: isFirst,
-        prefs: recoveryEmail ? { recovery_email: recoveryEmail } : {},
+        prefs: { recovery_email: recoveryEmail },
       },
       { onConflict: "id" },
     )

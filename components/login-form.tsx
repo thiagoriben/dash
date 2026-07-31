@@ -135,10 +135,10 @@ export function LoginForm() {
         ) : null}
 
         {mode === "signup" ? (
-          <Field label="Email de recuperação (opcional)">
-            <Input name="email" type="email" placeholder="voce@email.com" />
+          <Field label="Email">
+            <Input name="email" type="email" placeholder="voce@email.com" required />
             <p className="mt-1 text-xs text-muted text-pretty">
-              Não é obrigatório, mas você só consegue recuperar a senha se cadastrar um email aqui.
+              Obrigatório. Usado para recuperar a senha e receber avisos importantes.
             </p>
           </Field>
         ) : null}
