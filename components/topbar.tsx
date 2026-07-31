@@ -4,8 +4,10 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useTransition } from "react"
 import { Select } from "@/components/ui"
 import { CalendarRange, Loader2 } from "lucide-react"
-import type { Period } from "@/lib/data"
+import type { Period, Notification } from "@/lib/data"
 import { PrivacyToggle } from "@/components/privacy"
+import { NotificationBell } from "@/components/notification-bell"
+import { FeedbackButton } from "@/components/feedback-button"
 
 const periods: { value: Period; label: string }[] = [
   { value: "hoje", label: "Hoje" },
@@ -17,7 +19,14 @@ const periods: { value: Period; label: string }[] = [
   { value: "tudo", label: "Todo período" },
 ]
 
-export function Topbar() {
+export function Topbar({
+  meId,
+  notifications = [],
+}: {
+  meId: string | null
+  notifications?: Notification[]
+  currentPath?: string
+}) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -59,7 +68,11 @@ export function Topbar() {
           </>
         )}
       </div>
-      <PrivacyToggle />
+      <div className="flex items-center gap-2">
+        <FeedbackButton page={pathname} />
+        {meId ? <NotificationBell meId={meId} initial={notifications} /> : null}
+        <PrivacyToggle />
+      </div>
     </header>
   )
 }

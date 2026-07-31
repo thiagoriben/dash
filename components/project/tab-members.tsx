@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { Profile, Project } from "@/lib/types"
-import type { ProjectMemberWithProfile, JoinRequestView } from "@/lib/data"
+import type { ProjectMemberWithProfile, JoinRequestView, FriendView } from "@/lib/data"
 import {
   Card,
   CardContent,
@@ -20,8 +20,8 @@ import {
 } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { addProjectMember, removeProjectMember } from "@/app/actions/projects"
-import { respondJoinRequest } from "@/app/actions/social"
-import { Plus, Trash2, Crown, Users, Copy, Check, UserCheck, Inbox } from "lucide-react"
+import { respondJoinRequest, inviteFriendToProject } from "@/app/actions/social"
+import { Plus, Trash2, Crown, Users, Copy, Check, UserCheck, Inbox, UserPlus } from "lucide-react"
 
 export function TabMembers({
   project,
@@ -29,18 +29,40 @@ export function TabMembers({
   owner,
   isOwner,
   joinRequests = [],
+  friends = [],
+  meId,
 }: {
   project: Project
   members: ProjectMemberWithProfile[]
   owner: Profile | null
   isOwner: boolean
   joinRequests?: JoinRequestView[]
+  friends?: FriendView[]
+  meId?: string
 }) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string>()
   const [copied, setCopied] = useState(false)
+  const [invitedIds, setInvitedIds] = useState<string[]>([])
+  const [inviteError, setInviteError] = useState<string>()
   const router = useRouter()
+
+  // Amigos que ainda não participam do projeto (nem dono, nem membro).
+  const memberIds = new Set([project.owner_id, ...members.map((m) => m.user_id)])
+  const invitableFriends = friends.filter((f) => !memberIds.has(f.profile.id))
+
+  function invite(friendId: string) {
+    setInviteError(undefined)
+    startTransition(async () => {
+      const res = await inviteFriendToProject(project.id, friendId)
+      if (res?.error) setInviteError(res.error)
+      else {
+        setInvitedIds((prev) => [...prev, friendId])
+        router.refresh()
+      }
+    })
+  }
 
   function copyId() {
     navigator.clipboard?.writeText(project.id)
@@ -96,6 +118,48 @@ export function TabMembers({
           </Button>
         </CardContent>
       </Card>
+
+      {/* Convidar amigos direto para o projeto */}
+      {isOwner && invitableFriends.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus size={16} className="text-primary" /> Convidar amigos
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <p className="text-sm text-muted">
+              Convide um amigo direto para este projeto. Ele recebe uma notificação e vira sócio ao aceitar.
+            </p>
+            {invitableFriends.map((f) => {
+              const invited = invitedIds.includes(f.profile.id)
+              return (
+                <div
+                  key={f.profile.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-border)] p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{f.profile.full_name || f.profile.username}</p>
+                    <p className="truncate text-xs text-muted">@{f.profile.username}</p>
+                  </div>
+                  <Button size="sm" variant="outline" disabled={pending || invited} onClick={() => invite(f.profile.id)}>
+                    {invited ? (
+                      <>
+                        <Check size={14} /> Convidado
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={14} /> Convidar
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )
+            })}
+            {inviteError ? <p className="text-sm text-negative">{inviteError}</p> : null}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pedidos de entrada pendentes (só dono aprova) */}
       {isOwner && joinRequests.length > 0 && (

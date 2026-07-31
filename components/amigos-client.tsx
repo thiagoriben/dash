@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import type { FriendView, JoinRequestView } from "@/lib/data"
+import type { FriendView, JoinRequestView, ProjectInvitationView } from "@/lib/data"
 import { Card, CardContent, CardHeader, CardTitle, Button, Field, Input, Badge } from "@/components/ui"
 import {
   UserPlus,
@@ -15,12 +15,14 @@ import {
   Trash2,
   MessageSquare,
   UserCircle,
+  Mail,
 } from "lucide-react"
 import {
   sendFriendRequest,
   respondFriendRequest,
   removeFriend,
   requestJoinProject,
+  respondProjectInvitation,
 } from "@/app/actions/social"
 
 function initials(s?: string | null) {
@@ -32,11 +34,13 @@ export function AmigosClient({
   incoming,
   outgoing,
   joinRequests,
+  projectInvites = [],
 }: {
   friends: FriendView[]
   incoming: FriendView[]
   outgoing: FriendView[]
   joinRequests: JoinRequestView[]
+  projectInvites?: ProjectInvitationView[]
 }) {
   const [pending, startTransition] = useTransition()
   const [friendError, setFriendError] = useState<string>()
@@ -81,6 +85,13 @@ export function AmigosClient({
   function unfriend(id: string) {
     startTransition(async () => {
       await removeFriend(id)
+      router.refresh()
+    })
+  }
+
+  function respondInvite(id: string, accept: boolean) {
+    startTransition(async () => {
+      await respondProjectInvitation(id, accept)
       router.refresh()
     })
   }
@@ -155,6 +166,41 @@ export function AmigosClient({
                     <Check size={14} /> Aceitar
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => respond(f.friendshipId, false)} disabled={pending}>
+                    <X size={14} /> Recusar
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Convites para projetos (recebidos de amigos) */}
+      {projectInvites.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail size={16} className="text-primary" /> Convites para projetos
+              <Badge tone="secondary">{projectInvites.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {projectInvites.map((inv) => (
+              <div key={inv.id} className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-border)] p-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <FolderInput size={15} className="text-muted" />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{inv.projectName ?? "Projeto"}</p>
+                    <p className="truncate text-xs text-muted">
+                      Convite de {inv.inviter?.full_name || inv.inviter?.username || "um sócio"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => respondInvite(inv.id, true)} disabled={pending}>
+                    <Check size={14} /> Aceitar
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => respondInvite(inv.id, false)} disabled={pending}>
                     <X size={14} /> Recusar
                   </Button>
                 </div>

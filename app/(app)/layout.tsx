@@ -4,7 +4,7 @@ import { Sidebar } from "@/components/sidebar"
 import { Topbar } from "@/components/topbar"
 import { MobileNav } from "@/components/mobile-nav"
 import { AppShell } from "@/components/app-shell"
-import { getCurrentProfile, getPendingProfiles } from "@/lib/data"
+import { getCurrentProfile, getPendingProfiles, getNotifications } from "@/lib/data"
 import { markDailyAccess } from "@/lib/activity"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +17,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (profile?.approved) void markDailyAccess(profile)
 
   const collapsed = profile?.prefs?.sidebar_collapsed ?? false
-  const pending = profile?.role === "admin" ? await getPendingProfiles() : []
+  const [pending, notifications] = await Promise.all([
+    profile?.role === "admin" ? getPendingProfiles() : Promise.resolve([]),
+    profile ? getNotifications(profile.id) : Promise.resolve([]),
+  ])
 
   // Cor de destaque personalizada: injeta como override de --brand.
   const accent = profile?.prefs?.accent_color
@@ -36,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       }
       topbar={
         <Suspense fallback={<div className="h-16 border-b border-[color:var(--color-border)]" />}>
-          <Topbar />
+          <Topbar meId={profile?.id ?? null} notifications={notifications} currentPath="" />
         </Suspense>
       }
       mobileNav={<MobileNav profile={profile} />}

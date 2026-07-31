@@ -19,6 +19,7 @@ import {
   getProjectMembers,
   getBankAccounts,
   getProjectJoinRequests,
+  getFriends,
   getCustomMetrics,
   getShortcutCategories,
   getShortcuts,
@@ -69,6 +70,7 @@ export default async function ProjectPage({
     activity,
     banks,
     joinRequests,
+    friendsData,
     customMetrics,
     orgCategories,
     orgShortcuts,
@@ -92,6 +94,7 @@ export default async function ProjectPage({
     getActivity({ projectId: id, limit: 60 }),
     getBankAccounts(profile),
     getProjectJoinRequests(id),
+    getFriends(profile.id),
     getCustomMetrics(profile.id, id),
     getShortcutCategories(profile.id, id),
     getShortcuts(profile.id, id),
@@ -132,6 +135,7 @@ export default async function ProjectPage({
       currencies={currencies}
       meId={profile.id}
       joinRequests={joinRequests}
+      friends={friendsData.friends}
       customMetrics={customMetrics}
       orgCategories={orgCategories}
       orgShortcuts={orgShortcuts}

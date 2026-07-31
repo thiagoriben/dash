@@ -400,6 +400,16 @@ export async function submitFeedback(formData: FormData) {
   return { ok: true }
 }
 
+/** Marca um feedback como resolvido/aberto (admin). */
+export async function setFeedbackStatus(id: string, status: "open" | "resolved") {
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me || me.role !== "admin") return { error: "Apenas admins." }
+  await supabase.from("feedback").update({ status }).eq("id", id)
+  revalidatePath("/admin/feedback")
+  return { ok: true }
+}
+
 /* ============================ CHAT ============================ */
 
 export async function sendChatMessage(projectId: string, body: string) {
@@ -440,6 +450,15 @@ export async function sendDirectMessage(recipientId: string, body: string) {
     .from("direct_messages")
     .insert({ sender_id: me.id, recipient_id: recipientId, body: text })
   if (error) return { error: error.message }
+  await createNotifications([
+    {
+      userId: recipientId,
+      type: "direct_message",
+      title: `Nova mensagem de ${me.full_name || me.username}`,
+      body: text.slice(0, 120),
+      link: "/socios",
+    },
+  ])
   return { ok: true }
 }
 

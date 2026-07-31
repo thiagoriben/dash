@@ -60,7 +60,7 @@ import { EditProjectModal } from "./edit-project-modal"
 import { CaixaClient } from "@/components/caixa-client"
 import { TabChat } from "./tab-chat"
 import { OrganizacaoClient } from "@/components/organizacao-client"
-import type { ProjectMemberWithProfile, JoinRequestView } from "@/lib/data"
+import type { ProjectMemberWithProfile, JoinRequestView, FriendView } from "@/lib/data"
 import type { ShortcutCategory, Shortcut, Note, TodoItem } from "@/lib/types"
 
 const BASE_TABS = [
@@ -144,6 +144,7 @@ export function ProjectDetail(props: {
   currencies: string[]
   meId: string
   joinRequests: JoinRequestView[]
+  friends?: FriendView[]
   customMetrics: CustomMetric[]
   orgCategories: ShortcutCategory[]
   orgShortcuts: Shortcut[]
@@ -370,6 +371,8 @@ export function ProjectDetail(props: {
             owner={props.owner}
             isOwner={props.isOwner}
             joinRequests={props.joinRequests}
+            friends={props.friends}
+            meId={props.meId}
           />
         )}
         {tab === "Chat" && isPartner && (

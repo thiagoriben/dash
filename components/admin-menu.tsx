@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import type { Profile } from "@/lib/types"
 import { approveUser, rejectUser } from "@/app/actions/users"
 import { cn } from "@/lib/utils"
-import { ShieldCheck, Check, X, Users, UserCheck } from "lucide-react"
+import { ShieldCheck, Check, X, Users, UserCheck, MessageSquareWarning } from "lucide-react"
 
 /**
  * Menu único de administração na sidebar. Reúne, num só ícone, tudo que é
@@ -27,7 +27,10 @@ export function AdminMenu({ pending, collapsed }: { pending: Profile[]; collapse
     return () => document.removeEventListener("mousedown", onDoc)
   }, [open])
 
-  const links = [{ href: "/usuarios", label: "Usuários", icon: Users }]
+  const links = [
+    { href: "/usuarios", label: "Usuários", icon: Users },
+    { href: "/admin/feedback", label: "Feedback", icon: MessageSquareWarning },
+  ]
 
   return (
     <div ref={ref} className="relative">

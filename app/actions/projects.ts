@@ -218,6 +218,18 @@ export async function addProjectMember(projectId: string, formData: FormData) {
   if (error) {
     return { error: error.code === "23505" ? "Este usuário já é colaborador." : error.message }
   }
+
+  // Notifica o novo colaborador (usa service role: destinatário é outro usuário).
+  const { data: project } = await supabase.from("projects").select("name").eq("id", projectId).maybeSingle()
+  const admin = createAdminClient()
+  await admin.from("notifications").insert({
+    user_id: prof.id,
+    type: "project_member_added",
+    title: "Você foi adicionado a um projeto",
+    body: `Agora você é sócio de "${project?.name ?? "um projeto"}".`,
+    link: `/projetos/${projectId}`,
+  })
+
   revalidatePath(`/projetos/${projectId}`)
   return { ok: true }
 }

@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation"
-import { getCurrentProfile, getFriends, getMyJoinRequests } from "@/lib/data"
+import {
+  getCurrentProfile,
+  getFriends,
+  getMyJoinRequests,
+  getIncomingProjectInvitations,
+} from "@/lib/data"
 import { AmigosClient } from "@/components/amigos-client"
 
 export const metadata = { title: "Sócios | Dash" }
@@ -8,9 +13,10 @@ export default async function SociosPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect("/login")
 
-  const [{ friends, incoming, outgoing }, joinRequests] = await Promise.all([
+  const [{ friends, incoming, outgoing }, joinRequests, projectInvites] = await Promise.all([
     getFriends(profile.id),
     getMyJoinRequests(profile.id),
+    getIncomingProjectInvitations(profile.id),
   ])
 
   return (
@@ -19,6 +25,7 @@ export default async function SociosPage() {
       incoming={incoming}
       outgoing={outgoing}
       joinRequests={joinRequests}
+      projectInvites={projectInvites}
     />
   )
 }
