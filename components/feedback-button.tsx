@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { MessageSquarePlus } from "lucide-react"
+import { Bug } from "lucide-react"
 import { Modal } from "@/components/modal"
 import { Button, Field, Select, Textarea } from "@/components/ui"
 import { submitFeedback } from "@/app/actions/social"
@@ -33,13 +33,14 @@ export function FeedbackButton({ page }: { page: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Enviar feedback"
+        aria-label="Reportar bug ou enviar feedback"
+        title="Reportar bug"
         className="grid h-9 w-9 place-items-center rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] text-muted transition-colors hover:text-foreground"
       >
-        <MessageSquarePlus className="h-4 w-4" />
+        <Bug className="h-4 w-4" />
       </button>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Enviar feedback">
+      <Modal open={open} onClose={() => setOpen(false)} title="Reportar bug ou enviar feedback">
         {done ? (
           <p className="py-6 text-center text-sm text-primary">Obrigado! Seu feedback foi enviado.</p>
         ) : (

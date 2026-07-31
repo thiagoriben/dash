@@ -56,7 +56,7 @@ export function AmigosClient({
       const res = await sendFriendRequest(formData)
       if (res?.error) setFriendError(res.error)
       else {
-        setFriendMsg(res.accepted ? "Pedido aceito — vocês já são sócios!" : "Pedido enviado.")
+        setFriendMsg(res.accepted ? "Pedido aceito — vocês já são amigos!" : "Pedido enviado.")
         router.refresh()
       }
     })
@@ -99,9 +99,10 @@ export function AmigosClient({
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="font-display text-2xl font-semibold">Sócios & Sociedades</h1>
+        <h1 className="font-display text-2xl font-semibold">Amigos</h1>
         <p className="text-sm text-muted">
-          Convide sócios por nome de usuário (o pedido precisa ser aceito) ou peça para entrar num projeto com o ID dele.
+          Adicione amigos por nome de usuário (o pedido precisa ser aceito). Amizade serve para
+          conversar e compartilhar notas — sócio é quem participa de um projeto (aba Membros do projeto).
         </p>
       </header>
 
@@ -110,7 +111,7 @@ export function AmigosClient({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <UserPlus size={16} className="text-primary" /> Convidar sócio
+              <UserPlus size={16} className="text-primary" /> Adicionar amigo
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -214,13 +215,13 @@ export function AmigosClient({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users size={16} className="text-primary" /> Seus sócios
+            <Users size={16} className="text-primary" /> Seus amigos
             <span className="text-sm font-normal text-muted">({friends.length})</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {friends.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">Você ainda não tem sócios. Convide alguém pelo usuário.</p>
+            <p className="py-6 text-center text-sm text-muted">Você ainda não tem amigos. Adicione alguém pelo usuário.</p>
           ) : (
             friends.map((f) => (
               <div key={f.friendshipId} className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-border)] p-3">
@@ -243,7 +244,7 @@ export function AmigosClient({
                   <button
                     onClick={() => unfriend(f.friendshipId)}
                     className="ml-1 text-muted transition-colors hover:text-negative"
-                    aria-label="Desfazer sociedade"
+                    aria-label="Desfazer amizade"
                     disabled={pending}
                   >
                     <Trash2 size={16} />
@@ -267,7 +268,7 @@ export function AmigosClient({
             {outgoing.map((f) => (
               <div key={f.friendshipId} className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-border)] p-3">
                 <PersonRow name={f.profile.full_name || f.profile.username} sub={`@${f.profile.username}`} />
-                <Badge tone="secondary">Sociedade pendente</Badge>
+                <Badge tone="secondary">Amizade pendente</Badge>
               </div>
             ))}
             {joinRequests.map((r) => (

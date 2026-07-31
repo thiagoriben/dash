@@ -7,7 +7,7 @@ import {
 } from "@/lib/data"
 import { AmigosClient } from "@/components/amigos-client"
 
-export const metadata = { title: "Sócios | Dash" }
+export const metadata = { title: "Amigos | Dash" }
 
 export default async function SociosPage() {
   const profile = await getCurrentProfile()

@@ -105,12 +105,35 @@ export async function getPendingProfiles(): Promise<Profile[]> {
 }
 
 /**
- * Projetos visíveis para o usuário. O RLS já restringe as linhas retornadas
- * aos projetos que o usuário criou OU nos quais é colaborador (project_members),
- * então basta retornar o que vier — sem filtro extra de visibilidade.
+ * Projetos do workspace pessoal do usuário: apenas os que ele CRIOU ou nos quais
+ * é colaborador/sócio (project_members). Escopo explícito por membership — NÃO
+ * confia no bypass de admin do RLS, senão o admin veria todos os projetos de
+ * todos os usuários misturados no próprio painel. Ser amigo de alguém nunca dá
+ * acesso aos projetos dele. Admin acessa qualquer projeto por link direto (RLS
+ * permite) e vê a lista global no painel admin (getAllProjects).
  */
 export async function getVisibleProjects(profile: Profile | null): Promise<Project[]> {
   if (!profile) return []
+  const supabase = await createClient()
+  const [ownedRes, memberRes] = await Promise.all([
+    supabase.from("projects").select("id").eq("owner_id", profile.id),
+    supabase.from("project_members").select("project_id").eq("user_id", profile.id),
+  ])
+  const ids = new Set<string>()
+  for (const o of ownedRes.data ?? []) ids.add(o.id as string)
+  for (const m of memberRes.data ?? []) ids.add(m.project_id as string)
+  if (ids.size === 0) return []
+  const { data } = await supabase
+    .from("projects")
+    .select("*")
+    .in("id", Array.from(ids))
+    .order("created_at", { ascending: false })
+  return (data ?? []) as Project[]
+}
+
+/** Lista GLOBAL de todos os projetos — apenas para o painel admin. */
+export async function getAllProjects(profile: Profile | null): Promise<Project[]> {
+  if (!profile || profile.role !== "admin") return []
   const supabase = await createClient()
   const { data } = await supabase
     .from("projects")
@@ -496,6 +519,9 @@ export type FeedbackView = {
   page: string | null
   status: string
   created_at: string
+  severity: string
+  auto: boolean
+  detail: Record<string, unknown> | null
   profile: Profile | null
 }
 
@@ -514,6 +540,9 @@ export async function getFeedback(): Promise<FeedbackView[]> {
     page: r.page,
     status: r.status,
     created_at: r.created_at,
+    severity: r.severity ?? "normal",
+    auto: r.auto ?? false,
+    detail: (r.detail as Record<string, unknown>) ?? null,
     profile: (r.profile as Profile) ?? null,
   }))
 }

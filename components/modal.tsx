@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -19,6 +20,9 @@ export function Modal({
   children: React.ReactNode
   className?: string
 }) {
+  const [mounted, setMounted] = React.useState(false)
+  React.useEffect(() => setMounted(true), [])
+
   React.useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose()
@@ -30,9 +34,11 @@ export function Modal({
     }
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || !mounted) return null
 
-  return (
+  // Portal para o body: escapa de ancestrais com backdrop-filter/transform
+  // (topbar, sidebar) que criam containing block e prendiam o modal no topo.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -64,6 +70,7 @@ export function Modal({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

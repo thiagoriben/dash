@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/sidebar"
 import { Topbar } from "@/components/topbar"
 import { MobileNav } from "@/components/mobile-nav"
 import { AppShell } from "@/components/app-shell"
+import { BugDetector } from "@/components/bug-detector"
 import { getCurrentProfile, getPendingProfiles, getNotifications } from "@/lib/data"
 import { markDailyAccess } from "@/lib/activity"
 
@@ -32,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       {accentStyle ? <style dangerouslySetInnerHTML={{ __html: accentStyle }} /> : null}
+      {profile ? <BugDetector /> : null}
     <AppShell
       initialCollapsed={collapsed}
       sidebar={

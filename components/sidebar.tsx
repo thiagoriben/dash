@@ -33,7 +33,7 @@ const principal: Item[] = [
 ]
 // Social: relações e conversas (amigos, sócios e chats diretos/de projeto).
 const social: Item[] = [
-  { href: "/socios", label: "Sócios", icon: Users },
+  { href: "/socios", label: "Amigos", icon: Users },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/ranking", label: "Ranking", icon: Trophy },
 ]

@@ -400,6 +400,84 @@ export async function submitFeedback(formData: FormData) {
   return { ok: true }
 }
 
+/**
+ * Detector de bug automático: chamado pelo cliente quando um erro não tratado
+ * acontece (window.onerror, unhandledrejection, error boundary). Grava um
+ * feedback estruturado kind='auto_bug' com detalhes técnicos e notifica os
+ * admins. Só admin enxerga esses relatos (RLS + página /admin/feedback).
+ */
+export async function reportAutoBug(payload: {
+  message: string
+  stack?: string | null
+  page?: string | null
+  url?: string | null
+  userAgent?: string | null
+  componentStack?: string | null
+  source?: string | null
+}) {
+  const supabase = await createClient()
+  const me = await getCurrentProfile()
+  if (!me) return { ok: false }
+
+  const message = (payload.message || "Erro desconhecido").slice(0, 500)
+  const page = payload.page || null
+
+  // Anti-spam: se já existe um auto_bug idêntico deste usuário nos últimos 10 min,
+  // não duplica nem renotifica.
+  const since = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { data: recent } = await supabase
+    .from("feedback")
+    .select("id")
+    .eq("user_id", me.id)
+    .eq("kind", "auto_bug")
+    .eq("message", message)
+    .gte("created_at", since)
+    .maybeSingle()
+  if (recent) return { ok: true, deduped: true }
+
+  // Heurística simples de severidade.
+  const lower = message.toLowerCase()
+  const severity =
+    lower.includes("chunk") || lower.includes("network") || lower.includes("failed to fetch")
+      ? "high"
+      : "critical"
+
+  const detail = {
+    message,
+    stack: payload.stack ?? null,
+    url: payload.url ?? null,
+    userAgent: payload.userAgent ?? null,
+    componentStack: payload.componentStack ?? null,
+    source: payload.source ?? "client",
+    at: new Date().toISOString(),
+  }
+
+  const { error } = await supabase.from("feedback").insert({
+    user_id: me.id,
+    kind: "auto_bug",
+    auto: true,
+    severity,
+    message,
+    page,
+    status: "open",
+    detail,
+  })
+  if (error) return { ok: false }
+
+  const admin = createAdminClient()
+  const { data: admins } = await admin.from("profiles").select("id").eq("role", "admin")
+  await createNotifications(
+    ((admins ?? []) as { id: string }[]).map((a) => ({
+      userId: a.id,
+      type: "auto_bug",
+      title: "Bug detectado automaticamente",
+      body: `${me.full_name || me.username}: ${message.slice(0, 90)}`,
+      link: "/admin/feedback",
+    })),
+  )
+  return { ok: true }
+}
+
 /** Marca um feedback como resolvido/aberto (admin). */
 export async function setFeedbackStatus(id: string, status: "open" | "resolved") {
   const supabase = await createClient()
@@ -435,7 +513,7 @@ export async function sendDirectMessage(recipientId: string, body: string) {
   if (!text) return { error: "Mensagem vazia." }
   if (recipientId === me.id) return { error: "Não dá pra conversar consigo mesmo." }
 
-  // Confirma que são sócios (amizade aceita).
+  // Confirma que são amigos (amizade aceita).
   const { data: friendship } = await supabase
     .from("friendships")
     .select("id")
@@ -444,7 +522,7 @@ export async function sendDirectMessage(recipientId: string, body: string) {
       `and(requester_id.eq.${me.id},addressee_id.eq.${recipientId}),and(requester_id.eq.${recipientId},addressee_id.eq.${me.id})`,
     )
     .maybeSingle()
-  if (!friendship) return { error: "Vocês precisam ser sócios para conversar." }
+  if (!friendship) return { error: "Vocês precisam ser amigos para conversar." }
 
   const { error } = await supabase
     .from("direct_messages")
