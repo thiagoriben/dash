@@ -16,7 +16,7 @@ import {
   duplicateCreative,
   deleteCreative,
 } from "@/app/actions/projects"
-import { Plus } from "lucide-react"
+import { Plus, ImageIcon, Video, ExternalLink, Play } from "lucide-react"
 
 const today = () => new Date().toISOString().slice(0, 10)
 const fmtDate = (v: string | null) =>
@@ -45,6 +45,7 @@ export function TabCreatives({
   const [editing, setEditing] = useState<Creative | null>(null)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string>()
+  const [preview, setPreview] = useState<Creative | null>(null)
   const router = useRouter()
 
   // Agrega as vendas reais por criativo (quantidade e faturamento bruto).
@@ -119,6 +120,34 @@ export function TabCreatives({
             return (
               <Card key={c.id}>
                 <CardContent className="flex flex-col gap-3 p-4">
+                  {c.media_url ? (
+                    <button
+                      type="button"
+                      onClick={() => setPreview(c)}
+                      className="group relative aspect-video w-full overflow-hidden rounded-lg border border-[color:var(--color-border)] bg-black/30"
+                      title="Pré-visualizar"
+                    >
+                      {c.media_type === "video" ? (
+                        <>
+                          {/\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(c.media_url) ? (
+                            <video src={c.media_url} className="h-full w-full object-cover" muted preload="metadata" />
+                          ) : (
+                            <div className="grid h-full w-full place-items-center bg-white/[0.03]">
+                              <Video size={26} className="text-muted" />
+                            </div>
+                          )}
+                          <span className="absolute inset-0 grid place-items-center">
+                            <span className="grid h-10 w-10 place-items-center rounded-full bg-black/60 text-white transition-transform group-hover:scale-110">
+                              <Play size={18} className="ml-0.5" />
+                            </span>
+                          </span>
+                        </>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.media_url || "/placeholder.svg"} alt={c.name} className="h-full w-full object-cover" crossOrigin="anonymous" />
+                      )}
+                    </button>
+                  ) : null}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{c.name}</p>
@@ -197,12 +226,78 @@ export function TabCreatives({
           <Field label="Faturamento">
             <Input name="revenue" inputMode="decimal" placeholder="0,00" defaultValue={editing?.revenue} />
           </Field>
+
+          <div className="grid grid-cols-[1fr_auto] gap-3">
+            <Field label="Link da mídia (imagem ou vídeo)">
+              <Input
+                name="media_url"
+                type="url"
+                placeholder="https://..."
+                defaultValue={editing?.media_url ?? ""}
+              />
+            </Field>
+            <Field label="Tipo">
+              <Select name="media_type" defaultValue={editing?.media_type ?? ""}>
+                <option value="">Auto</option>
+                <option value="image">Imagem</option>
+                <option value="video">Vídeo</option>
+              </Select>
+            </Field>
+          </div>
+          <div className="rounded-lg border border-[color:var(--color-border)] bg-white/[0.02] p-3 text-xs text-muted">
+            <p className="mb-1 font-medium text-foreground/80">Como subir seu criativo na nuvem:</p>
+            <ol className="ml-4 list-decimal space-y-0.5">
+              <li>Suba o arquivo em uma ferramenta gratuita — imagem no{" "}
+                <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Imgur</a>{" "}
+                ou{" "}
+                <a href="https://postimages.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">PostImages</a>;
+                vídeo no{" "}
+                <a href="https://streamable.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Streamable</a>{" "}
+                ou Google Drive (link público).
+              </li>
+              <li>Copie o link direto do arquivo e cole no campo acima.</li>
+              <li>Salve — o criativo mostra a pré-visualização automaticamente.</li>
+            </ol>
+          </div>
+
           {error ? <p className="text-sm text-negative">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancelar</Button>
             <Button type="submit" disabled={pending}>{pending ? "Salvando..." : "Salvar"}</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!preview} onClose={() => setPreview(null)} title={preview?.name ?? "Criativo"}>
+        {preview?.media_url ? (
+          <div className="flex flex-col gap-3">
+            <div className="overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-black/40">
+              {preview.media_type === "video" ? (
+                /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(preview.media_url) ? (
+                  <video src={preview.media_url} className="max-h-[60vh] w-full" controls autoPlay crossOrigin="anonymous" />
+                ) : (
+                  <div className="flex flex-col items-center gap-3 p-8 text-center text-sm text-muted">
+                    <Video size={32} />
+                    <p>Este vídeo está hospedado em uma plataforma externa.</p>
+                  </div>
+                )
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview.media_url || "/placeholder.svg"} alt={preview.name} className="max-h-[60vh] w-full object-contain" crossOrigin="anonymous" />
+              )}
+            </div>
+            <a
+              href={preview.media_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+            >
+              {preview.media_type === "video" ? <Video size={14} /> : <ImageIcon size={14} />}
+              Abrir mídia original
+              <ExternalLink size={13} />
+            </a>
+          </div>
+        ) : null}
       </Modal>
     </div>
   )

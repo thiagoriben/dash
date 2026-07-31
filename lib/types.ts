@@ -111,6 +111,8 @@ export type Creative = {
   sales: number
   revenue: number
   notes: string | null
+  media_url: string | null
+  media_type: "image" | "video" | null
   created_at: string
 }
 

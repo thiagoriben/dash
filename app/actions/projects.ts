@@ -462,6 +462,21 @@ export async function deleteExpense(projectId: string, id: string) {
 }
 
 /* ---------- Criativos ---------- */
+/** Deriva media_url/media_type do form. Detecta tipo pela extensão/host da URL. */
+function mediaFields(formData: FormData): { media_url: string | null; media_type: string | null } {
+  const raw = String(formData.get("media_url") ?? "").trim()
+  if (!raw) return { media_url: null, media_type: null }
+  const explicit = String(formData.get("media_type") ?? "").trim()
+  let type: string | null = explicit === "image" || explicit === "video" ? explicit : null
+  if (!type) {
+    const low = raw.toLowerCase()
+    if (/\.(mp4|webm|mov|m4v|avi|mkv)(\?|#|$)/.test(low) || /youtu\.?be|vimeo|\/video\//.test(low)) type = "video"
+    else if (/\.(png|jpe?g|gif|webp|avif|svg|bmp)(\?|#|$)/.test(low)) type = "image"
+    else type = "image"
+  }
+  return { media_url: raw, media_type: type }
+}
+
 export async function createCreative(projectId: string, formData: FormData) {
   const supabase = await createClient()
   const name = String(formData.get("name") ?? "").trim()
@@ -476,6 +491,7 @@ export async function createCreative(projectId: string, formData: FormData) {
     sales: Number.parseInt(String(formData.get("sales") ?? "0"), 10) || 0,
     revenue: num(formData.get("revenue")),
     notes: String(formData.get("notes") ?? "") || null,
+    ...mediaFields(formData),
   })
   if (error) return { error: error.message }
   revalidatePath(`/projetos/${projectId}`)
@@ -496,6 +512,7 @@ export async function updateCreative(projectId: string, id: string, formData: Fo
       sales: Number.parseInt(String(formData.get("sales") ?? "0"), 10) || 0,
       revenue: num(formData.get("revenue")),
       notes: String(formData.get("notes") ?? "") || null,
+      ...mediaFields(formData),
     })
     .eq("id", id)
   if (error) return { error: error.message }
@@ -735,13 +752,14 @@ export async function withdrawFromGateway(formData: FormData) {
 
   const { data: gw } = await supabase
     .from("payment_gateways")
-    .select("id, withdraw_fee_pct")
+    .select("id, withdraw_fee_pct, withdraw_fee_fixed")
     .eq("id", gatewayId)
     .maybeSingle()
   if (!gw) return { error: "Gateway não encontrado." }
 
   const feePct = Number(gw.withdraw_fee_pct) || 0
-  const fee = +(gross * (feePct / 100)).toFixed(2)
+  const feeFixed = Number(gw.withdraw_fee_fixed) || 0
+  const fee = +(gross * (feePct / 100) + feeFixed).toFixed(2)
   const net = +(gross - fee).toFixed(2)
 
   const destKind = String(formData.get("dest_kind") ?? "carteira") === "projeto" ? "projeto" : "carteira"

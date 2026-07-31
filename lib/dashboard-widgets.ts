@@ -70,14 +70,21 @@ export const WIDGET_LABELS: Record<WidgetKey, string> = {
   sales: "Vendas",
 }
 
+/**
+ * Moeda de exibição. Os breakdowns são calculados em BRL; `toDisplay` converte
+ * o valor em BRL para a moeda escolhida e `currency` define o símbolo exibido.
+ */
+export type DisplayMoney = { currency: string; toDisplay: (brl: number) => number }
+
 /** Constrói a definição de um widget a partir do breakdown consolidado. */
 export function buildWidget(
   key: WidgetKey,
   b: MoneyBreakdown,
   view: SpendView,
   base: ProfitBase,
+  money?: DisplayMoney,
 ): WidgetDef {
-  return { ...buildWidgetBase(key, b, view, base), desc: WIDGET_DESCRIPTIONS[key] }
+  return { ...buildWidgetBase(key, b, view, base, money), desc: WIDGET_DESCRIPTIONS[key] }
 }
 
 function buildWidgetBase(
@@ -85,7 +92,11 @@ function buildWidgetBase(
   b: MoneyBreakdown,
   view: SpendView,
   base: ProfitBase,
+  money?: DisplayMoney,
 ): WidgetDef {
+  // Formata um valor em BRL na moeda de exibição escolhida (padrão: BRL).
+  const fmt = (brl: number) =>
+    money ? formatCurrency(money.toDisplay(brl), money.currency) : formatCurrency(brl)
   const profit = profitOf(b, base)
   const revenueTotal = b.revenue + b.cashRevenue
   switch (key) {
@@ -94,39 +105,39 @@ function buildWidgetBase(
       return {
         key,
         label: d.label,
-        value: formatCurrency(d.main),
-        hint: d.hint && d.hintValue != null ? `${d.hint} ${formatCurrency(d.hintValue)}` : null,
+        value: fmt(d.main),
+        hint: d.hint && d.hintValue != null ? `${d.hint} ${fmt(d.hintValue)}` : null,
         accent: "secondary",
       }
     }
     case "revenue":
-      return { key, label: WIDGET_LABELS.revenue, value: formatCurrency(revenueTotal), accent: "primary" }
+      return { key, label: WIDGET_LABELS.revenue, value: fmt(revenueTotal), accent: "primary" }
     case "profit":
       return {
         key,
         label: WIDGET_LABELS.profit,
-        value: formatCurrency(profit),
+        value: fmt(profit),
         accent: profit >= 0 ? "positive" : "negative",
       }
     case "roas":
       return { key, label: WIDGET_LABELS.roas, value: `${formatNumber(roasOf(b, base), 2)}x`, accent: "warning" }
     case "cpa":
-      return { key, label: WIDGET_LABELS.cpa, value: formatCurrency(cpaOf(b, base)), accent: "secondary" }
+      return { key, label: WIDGET_LABELS.cpa, value: fmt(cpaOf(b, base)), accent: "secondary" }
     case "ticket":
       return {
         key,
         label: WIDGET_LABELS.ticket,
-        value: formatCurrency(safeDiv(revenueTotal, b.salesCount)),
+        value: fmt(safeDiv(revenueTotal, b.salesCount)),
         accent: "primary",
       }
     case "trafficTax":
-      return { key, label: WIDGET_LABELS.trafficTax, value: formatCurrency(b.trafficTax), accent: "warning" }
+      return { key, label: WIDGET_LABELS.trafficTax, value: fmt(b.trafficTax), accent: "warning" }
     case "gatewayFees":
-      return { key, label: WIDGET_LABELS.gatewayFees, value: formatCurrency(b.gatewayFees), accent: "secondary" }
+      return { key, label: WIDGET_LABELS.gatewayFees, value: fmt(b.gatewayFees), accent: "secondary" }
     case "salesTax":
-      return { key, label: WIDGET_LABELS.salesTax, value: formatCurrency(b.salesTax), accent: "warning" }
+      return { key, label: WIDGET_LABELS.salesTax, value: fmt(b.salesTax), accent: "warning" }
     case "otherSpend":
-      return { key, label: WIDGET_LABELS.otherSpend, value: formatCurrency(b.otherSpend), accent: "secondary" }
+      return { key, label: WIDGET_LABELS.otherSpend, value: fmt(b.otherSpend), accent: "secondary" }
     case "margin":
       return {
         key,

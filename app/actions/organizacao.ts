@@ -133,6 +133,46 @@ export async function deleteShortcut(id: string) {
 
 /* ---------------- Notas ---------------- */
 
+/** Lê a lista de amigos com quem compartilhar do form (campo "shared_with", ids separados por vírgula). */
+function parseSharedWith(formData: FormData): string[] {
+  const raw = String(formData.get("shared_with") ?? "").trim()
+  if (!raw) return []
+  return Array.from(new Set(raw.split(",").map((s) => s.trim()).filter(Boolean)))
+}
+
+/**
+ * Sincroniza a tabela note_shares de uma nota com a lista escolhida (só amigos aceitos).
+ * Retorna quantos compartilhamentos ficaram ativos.
+ */
+async function syncNoteShares(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  meId: string,
+  noteId: string,
+  friendIds: string[],
+): Promise<number> {
+  // Restringe aos amigos aceitos do usuário (evita compartilhar com quem não é amigo).
+  let allowed = friendIds
+  if (friendIds.length > 0) {
+    const { data: fr } = await supabase
+      .from("friendships")
+      .select("requester_id, addressee_id, status")
+      .eq("status", "accepted")
+      .or(`requester_id.eq.${meId},addressee_id.eq.${meId}`)
+    const friendSet = new Set(
+      (fr ?? []).map((r: { requester_id: string; addressee_id: string }) =>
+        r.requester_id === meId ? r.addressee_id : r.requester_id,
+      ),
+    )
+    allowed = friendIds.filter((id) => friendSet.has(id))
+  }
+  // Substitui o conjunto de compartilhamentos.
+  await supabase.from("note_shares").delete().eq("note_id", noteId)
+  if (allowed.length > 0) {
+    await supabase.from("note_shares").insert(allowed.map((sid) => ({ note_id: noteId, shared_with: sid })))
+  }
+  return allowed.length
+}
+
 export async function createNote(projectId: string | null, formData: FormData) {
   const supabase = await createClient()
   const me = await getCurrentProfile()
@@ -141,16 +181,16 @@ export async function createNote(projectId: string | null, formData: FormData) {
   if (!title) return { error: "Dê um título para a nota." }
   const body = String(formData.get("body") ?? "").trim() || null
   const categoryId = String(formData.get("category_id") ?? "").trim() || null
-  const visibility = String(formData.get("visibility") ?? "privado") === "compartilhado" ? "compartilhado" : "privado"
-  const { error } = await supabase.from("notes").insert({
-    owner_id: me.id,
-    project_id: projectId,
-    category_id: categoryId,
-    title,
-    body,
-    visibility,
-  })
+  const friendIds = parseSharedWith(formData)
+  // Compartilhada quando há amigos escolhidos (só para notas pessoais).
+  const visibility = !projectId && friendIds.length > 0 ? "compartilhado" : "privado"
+  const { data: created, error } = await supabase
+    .from("notes")
+    .insert({ owner_id: me.id, project_id: projectId, category_id: categoryId, title, body, visibility })
+    .select("id")
+    .maybeSingle()
   if (error) return { error: error.message }
+  if (!projectId && created?.id) await syncNoteShares(supabase, me.id, created.id, friendIds)
   revalidatePath(pathFor(projectId))
   return { ok: true }
 }
@@ -163,11 +203,20 @@ export async function updateNote(id: string, formData: FormData) {
   const title = formData.get("title")
   const body = formData.get("body")
   const categoryId = formData.get("category_id")
-  const visibility = formData.get("visibility")
   if (title != null) patch.title = String(title).trim()
   if (body != null) patch.body = String(body).trim() || null
   if (categoryId != null) patch.category_id = String(categoryId).trim() || null
-  if (visibility != null) patch.visibility = String(visibility) === "compartilhado" ? "compartilhado" : "privado"
+
+  // Compartilhamento só se aplica a notas pessoais.
+  const hasShareField = formData.has("shared_with")
+  const { data: noteRow } = await supabase.from("notes").select("project_id, owner_id").eq("id", id).maybeSingle()
+  const isPersonal = noteRow && !noteRow.project_id
+  if (hasShareField && isPersonal) {
+    const friendIds = parseSharedWith(formData)
+    patch.visibility = friendIds.length > 0 ? "compartilhado" : "privado"
+    await syncNoteShares(supabase, me.id, id, friendIds)
+  }
+
   const { data, error } = await supabase
     .from("notes")
     .update(patch)

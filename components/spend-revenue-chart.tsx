@@ -12,7 +12,7 @@ import {
 import type { TimePoint } from "@/lib/aggregate"
 import { formatCurrency } from "@/lib/utils"
 
-export function SpendRevenueChart({ data }: { data: TimePoint[] }) {
+export function SpendRevenueChart({ data, currency = "BRL" }: { data: TimePoint[]; currency?: string }) {
   const formatted = data.map((d) => ({
     ...d,
     label: new Date(d.date + "T00:00:00").toLocaleDateString("pt-BR", {
@@ -60,7 +60,7 @@ export function SpendRevenueChart({ data }: { data: TimePoint[] }) {
             }}
             labelStyle={{ color: "#9098a3" }}
             formatter={(value: number, name) => [
-              formatCurrency(value),
+              formatCurrency(value, currency),
               name === "revenue" ? "Faturamento" : "Gasto",
             ]}
           />

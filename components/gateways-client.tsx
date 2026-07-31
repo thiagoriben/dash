@@ -85,8 +85,9 @@ export function GatewaysClient({
   const wPreview = useMemo(() => {
     const gross = Number(String(wGross).replace(",", ".")) || 0
     const feePct = wGateway?.withdraw_fee_pct ?? 0
-    const fee = +(gross * (feePct / 100)).toFixed(2)
-    return { gross, fee, net: +(gross - fee).toFixed(2), feePct }
+    const feeFixed = wGateway?.withdraw_fee_fixed ?? 0
+    const fee = +(gross * (feePct / 100) + feeFixed).toFixed(2)
+    return { gross, fee, net: +(gross - fee).toFixed(2), feePct, feeFixed }
   }, [wGross, wGateway])
 
   return (
@@ -134,7 +135,10 @@ export function GatewaysClient({
                         {formatPercent(g.fee_pct)}
                         {g.fee_fixed ? ` + ${formatCurrency(g.fee_fixed)}` : ""}
                       </Td>
-                      <Td>{formatPercent(g.withdraw_fee_pct ?? 0)}</Td>
+                      <Td>
+                        {formatPercent(g.withdraw_fee_pct ?? 0)}
+                        {g.withdraw_fee_fixed ? ` + ${formatCurrency(g.withdraw_fee_fixed)}` : ""}
+                      </Td>
                       <Td className="text-xs text-muted">
                         pix {g.term_days_pix === 0 ? "na hora" : `D+${g.term_days_pix}`} · cartão{" "}
                         {g.term_days_card === 0 ? "na hora" : `D+${g.term_days_card}`}
@@ -192,7 +196,14 @@ export function GatewaysClient({
                 defaultValue={editing?.withdraw_fee_pct}
               />
             </Field>
-            <div />
+            <Field label="Taxa de saque fixa (R$)">
+              <Input
+                name="withdraw_fee_fixed"
+                inputMode="decimal"
+                placeholder="0,00"
+                defaultValue={editing?.withdraw_fee_fixed}
+              />
+            </Field>
             <Field label="Prazo pix (dias)">
               <Input name="term_days_pix" inputMode="numeric" placeholder="0" defaultValue={editing?.term_days_pix} />
             </Field>
@@ -237,10 +248,16 @@ export function GatewaysClient({
             />
           </Field>
 
-          {wPreview.feePct > 0 ? (
+          {wPreview.feePct > 0 || wPreview.feeFixed > 0 ? (
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="rounded-lg border border-border px-3 py-2">
-                <p className="text-xs text-muted">Taxa de saque ({formatPercent(wPreview.feePct)})</p>
+                <p className="text-xs text-muted">
+                  Taxa de saque
+                  {wPreview.feePct > 0 ? ` (${formatPercent(wPreview.feePct)}` : " ("}
+                  {wPreview.feePct > 0 && wPreview.feeFixed > 0 ? " + " : ""}
+                  {wPreview.feeFixed > 0 ? formatCurrency(wPreview.feeFixed) : ""}
+                  {")"}
+                </p>
                 <p className="font-mono text-negative">− {formatCurrency(wPreview.fee)}</p>
               </div>
               <div className="rounded-lg border border-border px-3 py-2">

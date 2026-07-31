@@ -8,7 +8,7 @@ import { timeSeries } from "@/lib/aggregate"
 import { buildBreakdown } from "@/lib/money"
 import { buildWidget, resolveWidgets, DEFAULT_PROJECT_WIDGETS } from "@/lib/dashboard-widgets"
 import { diagnoseFunnel } from "@/lib/finance"
-import { toBRL, currencySymbol } from "@/lib/currency"
+import { toBRL, currencySymbol, normalizeCurrency } from "@/lib/currency"
 import { formatPercent } from "@/lib/utils"
 import { KpiCard } from "@/components/kpi-card"
 import { SpendRevenueChart } from "@/components/spend-revenue-chart"
@@ -77,6 +77,51 @@ export function TabOverview({
   )
   const router = useRouter()
 
+  // ---- Filtro de período ----
+  type RangePreset = "7d" | "30d" | "mes" | "tudo" | "custom"
+  const [rangePreset, setRangePreset] = useState<RangePreset>("tudo")
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const [customFrom, setCustomFrom] = useState("")
+  const [customTo, setCustomTo] = useState(todayStr)
+
+  // Intervalo efetivo [from, to] em YYYY-MM-DD (from vazio = sem limite inferior).
+  const range = useMemo(() => {
+    const to = rangePreset === "custom" ? customTo || todayStr : todayStr
+    if (rangePreset === "tudo") return { from: "", to: "" }
+    if (rangePreset === "custom") return { from: customFrom, to }
+    const d = new Date(to + "T00:00:00")
+    if (rangePreset === "mes") d.setDate(1)
+    else d.setDate(d.getDate() - (rangePreset === "7d" ? 6 : 29))
+    return { from: d.toISOString().slice(0, 10), to }
+  }, [rangePreset, customFrom, customTo, todayStr])
+
+  // Mantém apenas registros cuja data (campo informado) cai no intervalo.
+  function inRange(dateVal: string | null | undefined): boolean {
+    if (!range.from && !range.to) return true
+    const d = String(dateVal ?? "").slice(0, 10)
+    if (!d) return false
+    if (range.from && d < range.from) return false
+    if (range.to && d > range.to) return false
+    return true
+  }
+
+  const fMetrics = useMemo(() => metrics.filter((m) => inRange(m.date)), [metrics, range])
+  const fExpenses = useMemo(() => expenses.filter((e) => inRange(e.spent_at)), [expenses, range])
+  const fSales = useMemo(() => sales.filter((s) => inRange(s.sold_at)), [sales, range])
+  const fCardCharges = useMemo(() => cardCharges.filter((c) => inRange(c.charged_at)), [cardCharges, range])
+  const fCashEntries = useMemo(() => cashEntries.filter((c) => inRange(c.occurred_at)), [cashEntries, range])
+
+  // ---- Moeda de exibição ----
+  const [displayCur, setDisplayCur] = useState(projectCurrency)
+  const displayOptions = useMemo(
+    () => Array.from(new Set([projectCurrency, "BRL", ...currencies].map((c) => c.toUpperCase()))),
+    [projectCurrency, currencies],
+  )
+  // Breakdowns são calculados em BRL — converte para a moeda de exibição.
+  const brlToDisplay = (brl: number) =>
+    normalizeCurrency(displayCur) === "BRL" ? brl : brl / (usdBrl || 1)
+  const displayMoney = { currency: displayCur, toDisplay: brlToDisplay }
+
   /** Converte um valor da moeda digitada para a moeda do projeto (armazenamento). */
   function toProjectCurrency(raw: string): string {
     const n = Number.parseFloat(String(raw ?? "").replace(",", ".")) || 0
@@ -89,16 +134,22 @@ export function TabOverview({
 
   const breakdown = useMemo(
     () =>
-      buildBreakdown({ projects: [project], metrics, expenses, sales, cardCharges, cashEntries }, usdBrl, {
-        metaTaxPct,
-      }),
-    [project, metrics, expenses, sales, cardCharges, cashEntries, usdBrl, metaTaxPct],
+      buildBreakdown(
+        { projects: [project], metrics: fMetrics, expenses: fExpenses, sales: fSales, cardCharges: fCardCharges, cashEntries: fCashEntries },
+        usdBrl,
+        { metaTaxPct },
+      ),
+    [project, fMetrics, fExpenses, fSales, fCardCharges, fCashEntries, usdBrl, metaTaxPct],
   )
-  const series = timeSeries(metrics, [project], usdBrl)
+  // Série do gráfico convertida para a moeda de exibição.
+  const series = useMemo(() => {
+    const s = timeSeries(fMetrics, [project], usdBrl)
+    return s.map((p) => ({ ...p, spend: brlToDisplay(p.spend), revenue: brlToDisplay(p.revenue) }))
+  }, [fMetrics, project, usdBrl, displayCur])
   const historyPoints = series.map((s) => ({ date: s.date, liquido: s.revenue - s.spend, faturado: s.revenue }))
   const widgetKeys = resolveWidgets(widgets, DEFAULT_PROJECT_WIDGETS)
 
-  const funnelTot = metrics.reduce(
+  const funnelTot = fMetrics.reduce(
     (a, m) => ({
       impressions: a.impressions + m.impressions,
       clicks: a.clicks + m.clicks,
@@ -133,8 +184,33 @@ export function TabOverview({
             Atualiza sozinho com vendas e gastos. Lançar métricas do dia é opcional.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <HistoryPopover points={historyPoints} />
+          <Select
+            aria-label="Período"
+            value={rangePreset}
+            onChange={(e) => setRangePreset(e.target.value as RangePreset)}
+            className="h-9 w-auto text-sm"
+          >
+            <option value="tudo">Todo o período</option>
+            <option value="7d">Últimos 7 dias</option>
+            <option value="30d">Últimos 30 dias</option>
+            <option value="mes">Mês atual</option>
+            <option value="custom">Personalizado</option>
+          </Select>
+          <Select
+            aria-label="Moeda de exibição"
+            value={displayCur}
+            onChange={(e) => setDisplayCur(e.target.value)}
+            className="h-9 w-auto text-sm"
+            title="Moeda de exibição dos valores"
+          >
+            {displayOptions.map((c) => (
+              <option key={c} value={c}>
+                {c} ({currencySymbol(c)})
+              </option>
+            ))}
+          </Select>
           <Select
             aria-label="Como exibir o gasto"
             value={view}
@@ -171,9 +247,39 @@ export function TabOverview({
         </div>
       </div>
 
+      {(rangePreset === "custom" || displayCur !== projectCurrency) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[color:var(--color-border)] bg-white/[0.02] px-3 py-2 text-sm">
+          {rangePreset === "custom" && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">De</span>
+              <Input
+                type="date"
+                value={customFrom}
+                max={customTo || todayStr}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-8 w-auto text-sm"
+              />
+              <span className="text-xs text-muted">até</span>
+              <Input
+                type="date"
+                value={customTo}
+                max={todayStr}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-8 w-auto text-sm"
+              />
+            </div>
+          )}
+          {displayCur !== projectCurrency && (
+            <span className="text-xs text-muted">
+              Exibindo em {displayCur} · convertido de {projectCurrency} pela cotação US$ {usdBrl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {widgetKeys.map((k) => {
-          const w = buildWidget(k, breakdown, view, base)
+          const w = buildWidget(k, breakdown, view, base, displayMoney)
           if (!w) return null
           return <KpiCard key={k} label={w.label} value={w.value} hint={w.hint ?? undefined} info={w.desc} accent={w.accent} />
         })}
@@ -193,7 +299,7 @@ export function TabOverview({
           </CardHeader>
           <CardContent>
             {series.length > 1 ? (
-              <SpendRevenueChart data={series} />
+              <SpendRevenueChart data={series} currency={displayCur} />
             ) : (
               <div className="flex h-[280px] items-center justify-center text-center text-sm text-muted">
                 Sem métricas ainda — lance o primeiro dia para ver a evolução.
