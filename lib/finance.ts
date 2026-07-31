@@ -171,7 +171,10 @@ export function creativeSemaphore(
   cpaTarget: number,
   testBudget: number,
 ): SemaphoreColor {
-  if (spend >= testBudget && sales === 0) return "red"
+  // Sem dados (sem gasto e sem venda) não é "matar" — é apenas teste/sem dados.
+  if (spend <= 0 && sales <= 0) return "yellow"
+  // "Matar" só quando gastou pelo menos o orçamento de teste (definido) e não vendeu nada.
+  if (testBudget > 0 && spend >= testBudget && sales === 0) return "red"
   const cpa = safeDiv(spend, sales)
   if (sales > 0 && cpaTarget > 0 && cpa <= cpaTarget) return "green"
   return "yellow"

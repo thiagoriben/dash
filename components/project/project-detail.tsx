@@ -306,6 +306,9 @@ export function ProjectDetail(props: {
             expenses={props.expenses}
             usdBrl={props.usdBrl}
             currencies={props.currencies}
+            adAccounts={props.adAccounts}
+            cardCharges={props.cardCharges}
+            metaTaxPct={props.prefs?.meta_tax_pct ?? 0}
           />
         )}
         {tab === "Criativos" && (

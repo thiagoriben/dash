@@ -212,25 +212,84 @@ export async function removeProjectMember(projectId: string, id: string) {
 }
 
 /* ---------- Gastos ---------- */
+
+/**
+ * Espelha (ou remove) a saída no caixa do projeto — a "carteira" — para um gasto.
+ * Só gastos do tipo "ads" viram saída no caixa. O vínculo é feito por expense_id,
+ * e o lançamento fica com to_dashboard=false para NÃO duplicar na dashboard
+ * (que já conta o gasto de anúncio pela tabela de gastos).
+ */
+async function syncAdsExpenseToCash(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  opts: {
+    expenseId: string
+    projectId: string
+    type: string
+    amount: number
+    currency: string
+    spentAt: string
+    ownerId: string | null
+  },
+) {
+  // Remove qualquer espelho anterior deste gasto.
+  await supabase.from("cash_entries").delete().eq("expense_id", opts.expenseId)
+  if (opts.type !== "ads") return
+  await supabase.from("cash_entries").insert({
+    owner_id: opts.ownerId,
+    project_id: opts.projectId,
+    direction: "saida",
+    amount: opts.amount,
+    currency: opts.currency,
+    category: "Gasto com anúncio",
+    description: "Gasto de anúncio (carteira do projeto)",
+    occurred_at: opts.spentAt,
+    entry_type: "gasto_anuncio",
+    to_dashboard: false,
+    dashboard_kind: null,
+    expense_id: opts.expenseId,
+    created_by: opts.ownerId,
+  })
+}
+
 export async function createExpense(projectId: string, formData: FormData) {
   const supabase = await createClient()
   const profile = await getCurrentProfile()
   const amount = Number.parseFloat(String(formData.get("amount") ?? "0").replace(",", "."))
   if (!Number.isFinite(amount) || amount <= 0) return { error: "Valor inválido." }
 
-  const { error } = await supabase.from("expenses").insert({
-    project_id: projectId,
-    type: String(formData.get("type") ?? "ads"),
-    category: String(formData.get("category") ?? "") || null,
-    amount,
-    currency: normalizeCurrency(String(formData.get("currency") ?? "BRL")),
-    description: String(formData.get("description") ?? "") || null,
-    spent_at: String(formData.get("spent_at") ?? new Date().toISOString().slice(0, 10)),
-    recurring: formData.get("recurring") === "on",
-    ad_account_id: String(formData.get("ad_account_id") ?? "") || null,
-    created_by: profile?.id ?? null,
-  })
+  const type = String(formData.get("type") ?? "ads")
+  const currency = normalizeCurrency(String(formData.get("currency") ?? "BRL"))
+  const spentAt = String(formData.get("spent_at") ?? new Date().toISOString().slice(0, 10))
+
+  const { data: inserted, error } = await supabase
+    .from("expenses")
+    .insert({
+      project_id: projectId,
+      type,
+      category: String(formData.get("category") ?? "") || null,
+      amount,
+      currency,
+      description: String(formData.get("description") ?? "") || null,
+      spent_at: spentAt,
+      recurring: formData.get("recurring") === "on",
+      ad_account_id: String(formData.get("ad_account_id") ?? "") || null,
+      created_by: profile?.id ?? null,
+    })
+    .select("id")
+    .maybeSingle()
   if (error) return { error: error.message }
+
+  if (inserted?.id) {
+    await syncAdsExpenseToCash(supabase, {
+      expenseId: inserted.id,
+      projectId,
+      type,
+      amount,
+      currency,
+      spentAt,
+      ownerId: profile?.id ?? null,
+    })
+  }
   await logActivity({
     actor: profile,
     action: "create",
@@ -239,14 +298,135 @@ export async function createExpense(projectId: string, formData: FormData) {
     summary: `Lançou gasto de ${amount.toFixed(2)}`,
   })
   revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/caixa")
+  revalidatePath("/")
+  return { ok: true }
+}
+
+/** Edita um gasto existente e ressincroniza o espelho no caixa. */
+export async function updateExpense(projectId: string, id: string, formData: FormData) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  const amount = Number.parseFloat(String(formData.get("amount") ?? "0").replace(",", "."))
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Valor inválido." }
+
+  const type = String(formData.get("type") ?? "ads")
+  const currency = normalizeCurrency(String(formData.get("currency") ?? "BRL"))
+  const spentAt = String(formData.get("spent_at") ?? new Date().toISOString().slice(0, 10))
+
+  const { error } = await supabase
+    .from("expenses")
+    .update({
+      type,
+      category: String(formData.get("category") ?? "") || null,
+      amount,
+      currency,
+      description: String(formData.get("description") ?? "") || null,
+      spent_at: spentAt,
+      recurring: formData.get("recurring") === "on",
+      ad_account_id: String(formData.get("ad_account_id") ?? "") || null,
+    })
+    .eq("id", id)
+  if (error) return { error: error.message }
+
+  await syncAdsExpenseToCash(supabase, {
+    expenseId: id,
+    projectId,
+    type,
+    amount,
+    currency,
+    spentAt,
+    ownerId: profile?.id ?? null,
+  })
+  await logActivity({
+    actor: profile,
+    action: "update",
+    entity: "expense",
+    entityId: id,
+    projectId,
+    summary: `Editou gasto (${amount.toFixed(2)})`,
+  })
+  revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/caixa")
+  revalidatePath("/")
+  return { ok: true }
+}
+
+/**
+ * "Gasto atual" — atualiza (não soma) o gasto de anúncio do dia para uma conta.
+ * Se já existe um gasto de ads para (projeto, conta, dia), substitui o valor;
+ * senão cria. Evita o acúmulo indevido quando o usuário reporta o total do dia
+ * várias vezes (ex.: 50 de manhã, 80 à tarde, 100 à noite = total 100, não 230).
+ */
+export async function upsertCurrentAdSpend(projectId: string, formData: FormData) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  const amount = Number.parseFloat(String(formData.get("amount") ?? "0").replace(",", "."))
+  if (!Number.isFinite(amount) || amount < 0) return { error: "Valor inválido." }
+
+  const currency = normalizeCurrency(String(formData.get("currency") ?? "BRL"))
+  const spentAt = String(formData.get("spent_at") ?? new Date().toISOString().slice(0, 10))
+  const adAccountId = String(formData.get("ad_account_id") ?? "") || null
+
+  // Procura o gasto de ads existente para (projeto, conta, dia).
+  let q = supabase
+    .from("expenses")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("type", "ads")
+    .eq("spent_at", spentAt)
+  q = adAccountId ? q.eq("ad_account_id", adAccountId) : q.is("ad_account_id", null)
+  const { data: existing } = await q.maybeSingle()
+
+  let expenseId = existing?.id as string | undefined
+  if (expenseId) {
+    const { error } = await supabase
+      .from("expenses")
+      .update({ amount, currency, ad_account_id: adAccountId })
+      .eq("id", expenseId)
+    if (error) return { error: error.message }
+  } else {
+    const { data: inserted, error } = await supabase
+      .from("expenses")
+      .insert({
+        project_id: projectId,
+        type: "ads",
+        category: "Gasto com anúncio",
+        amount,
+        currency,
+        spent_at: spentAt,
+        ad_account_id: adAccountId,
+        created_by: profile?.id ?? null,
+      })
+      .select("id")
+      .maybeSingle()
+    if (error) return { error: error.message }
+    expenseId = inserted?.id
+  }
+
+  if (expenseId) {
+    await syncAdsExpenseToCash(supabase, {
+      expenseId,
+      projectId,
+      type: "ads",
+      amount,
+      currency,
+      spentAt,
+      ownerId: profile?.id ?? null,
+    })
+  }
+  revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/caixa")
   revalidatePath("/")
   return { ok: true }
 }
 
 export async function deleteExpense(projectId: string, id: string) {
   const supabase = await createClient()
+  // O espelho no caixa é removido em cascata (FK expense_id on delete cascade).
   await supabase.from("expenses").delete().eq("id", id)
   revalidatePath(`/projetos/${projectId}`)
+  revalidatePath("/caixa")
   return { ok: true }
 }
 
