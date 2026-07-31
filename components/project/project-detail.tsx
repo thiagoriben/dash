@@ -267,6 +267,7 @@ export function ProjectDetail(props: {
               widgets={props.prefs?.project_widgets}
               customMetrics={props.customMetrics}
               metricPresets={props.prefs?.metric_presets ?? []}
+              currencies={props.currencies}
             />
           )}
         {tab === "Caixa" && (
@@ -299,7 +300,12 @@ export function ProjectDetail(props: {
           <TabProducts project={project} products={props.products} gateways={props.gateways} />
         )}
         {tab === "Gastos" && (
-          <TabExpenses project={project} expenses={props.expenses} usdBrl={props.usdBrl} />
+          <TabExpenses
+            project={project}
+            expenses={props.expenses}
+            usdBrl={props.usdBrl}
+            currencies={props.currencies}
+          />
         )}
         {tab === "Criativos" && (
           <TabCreatives project={project} creatives={props.creatives} products={props.products} />

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { Expense, Project } from "@/lib/types"
-import { toBRL } from "@/lib/currency"
+import { toBRL, currencySymbol } from "@/lib/currency"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle, Button, Field, Input, Select, Badge, Table, Th, Td } from "@/components/ui"
 import { Modal } from "@/components/modal"
@@ -25,11 +25,16 @@ export function TabExpenses({
   project,
   expenses,
   usdBrl,
+  currencies = ["BRL", "USD", "EUR"],
 }: {
   project: Project
   expenses: Expense[]
   usdBrl: number
+  /** Moedas que o usuário acompanha — permite lançar o gasto na moeda real da conta. */
+  currencies?: string[]
 }) {
+  // Garante que a moeda do projeto e o BRL estejam sempre disponíveis no seletor.
+  const currencyOptions = Array.from(new Set([project.currency, "BRL", ...currencies].map((c) => c.toUpperCase())))
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string>()
@@ -155,8 +160,11 @@ export function TabExpenses({
             </Field>
             <Field label="Moeda">
               <Select name="currency" defaultValue={project.currency}>
-                <option value="BRL">BRL (R$)</option>
-                <option value="USD">USD (US$)</option>
+                {currencyOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c} ({currencySymbol(c)})
+                  </option>
+                ))}
               </Select>
             </Field>
             <Field label="Data">
