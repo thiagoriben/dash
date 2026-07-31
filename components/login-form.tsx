@@ -143,6 +143,18 @@ export function LoginForm() {
           </Field>
         ) : null}
 
+        {mode === "login" ? (
+          <label className="flex select-none items-center gap-2 text-sm text-muted">
+            <input
+              type="checkbox"
+              name="remember"
+              defaultChecked
+              className="h-4 w-4 rounded border-border accent-[var(--brand)]"
+            />
+            Lembrar de mim neste dispositivo
+          </label>
+        ) : null}
+
         {state?.error ? (
           <div className="flex items-center gap-2 rounded-xl border border-negative/30 bg-negative/10 px-3 py-2 text-sm text-negative">
             <AlertCircle size={16} />

@@ -49,8 +49,10 @@ export function KpiCard({
       </div>
       <div className="mt-3 flex items-end justify-between gap-2">
         <div>
-          <div className="font-mono text-2xl font-semibold tracking-tight text-foreground">{value}</div>
-          {hint ? <div className="mt-1 font-mono text-[11px] text-muted">{hint}</div> : null}
+          <div className="money font-mono text-2xl font-semibold tracking-tight text-foreground" data-money>
+            {value}
+          </div>
+          {hint ? <div className="money mt-1 font-mono text-[11px] text-muted" data-money>{hint}</div> : null}
         </div>
         {trend && trend.length > 1 ? <Sparkline data={trend} /> : null}
       </div>

@@ -121,3 +121,12 @@ body::after {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* Esconder valores: mascara qualquer elemento marcado com .money / [data-money]. */
+html[data-hide-values="true"] .money,
+html[data-hide-values="true"] [data-money] {
+  filter: blur(7px);
+  user-select: none;
+  cursor: default;
+  transition: filter 0.15s ease;
+}

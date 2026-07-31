@@ -45,10 +45,14 @@ export function Sidebar({
   profile,
   pending = [],
   usdBrl = 5,
+  fxOverrides = {},
+  fxCurrencies = ["USD", "EUR"],
 }: {
   profile: Profile | null
   pending?: Profile[]
   usdBrl?: number
+  fxOverrides?: Record<string, number>
+  fxCurrencies?: string[]
 }) {
   const pathname = usePathname()
   const { collapsed, toggle } = useSidebar()
@@ -85,7 +89,12 @@ export function Sidebar({
       <div className="flex flex-col gap-2 border-t border-[color:var(--color-border)] p-3">
         {isAdmin && <ApprovalsButton pending={pending} collapsed={collapsed} />}
 
-        <CurrencyPopover usdBrl={usdBrl} collapsed={collapsed} />
+        <CurrencyPopover
+          usdBrl={usdBrl}
+          currencies={fxCurrencies}
+          overrides={fxOverrides}
+          collapsed={collapsed}
+        />
 
         <button
           onClick={toggle}

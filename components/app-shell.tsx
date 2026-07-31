@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { setSidebarCollapsed } from "@/app/actions/projects"
+import { PrivacyProvider } from "@/components/privacy"
 
 type Ctx = { collapsed: boolean; toggle: () => void }
 const SidebarCtx = createContext<Ctx>({ collapsed: false, toggle: () => {} })
@@ -37,14 +38,16 @@ export function AppShell({
 
   return (
     <SidebarCtx.Provider value={{ collapsed, toggle }}>
-      <div className="min-h-dvh">
-        {sidebar}
-        <div className={cn("transition-[padding] duration-200", collapsed ? "md:pl-16" : "md:pl-60")}>
-          {topbar}
-          {mobileNav}
-          <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">{children}</main>
+      <PrivacyProvider>
+        <div className="min-h-dvh">
+          {sidebar}
+          <div className={cn("transition-[padding] duration-200", collapsed ? "md:pl-16" : "md:pl-60")}>
+            {topbar}
+            {mobileNav}
+            <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">{children}</main>
+          </div>
         </div>
-      </div>
+      </PrivacyProvider>
     </SidebarCtx.Provider>
   )
 }

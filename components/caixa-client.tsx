@@ -351,7 +351,7 @@ export function CaixaClient({
                     <div className="min-w-0">
                       <p className="truncate font-medium">{b.name}</p>
                       <p className="text-xs text-muted">{b.kind}</p>
-                      <p className="mt-1 font-mono text-sm">
+                      <p className="money mt-1 font-mono text-sm" data-money>
                         {currencySymbol(b.currency)} {b.balance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </p>
                     </div>
@@ -407,9 +407,10 @@ export function CaixaClient({
                       <Badge>{c.category ?? "—"}</Badge>
                     </Td>
                     <Td
-                      className={`text-right font-mono font-medium ${
+                      className={`money text-right font-mono font-medium ${
                         c.direction === "entrada" ? "text-positive" : "text-negative"
                       }`}
+                      data-money
                     >
                       {c.direction === "entrada" ? "+" : "−"}
                       {currencySymbol(c.currency ?? "BRL")} {c.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -724,7 +725,7 @@ function KpiCard({
         <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${toneClass}`}>{icon}</div>
         <div>
           <p className="text-xs text-muted">{label}</p>
-          <p className="font-mono text-xl font-semibold">{formatCurrency(value)}</p>
+          <p className="money font-mono text-xl font-semibold" data-money>{formatCurrency(value)}</p>
         </div>
       </CardContent>
     </Card>

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient, createAdminClient } from "@/lib/supabase/server"
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 const DOMAIN = "@dash.local"
@@ -15,6 +16,7 @@ export async function signIn(
 ): Promise<{ error?: string }> {
   const username = String(formData.get("username") ?? "").trim()
   const password = String(formData.get("password") ?? "")
+  const remember = formData.get("remember") != null
 
   if (!username || !password) {
     return { error: "Preencha usuário e senha." }
@@ -28,6 +30,16 @@ export async function signIn(
 
   if (error || !data.user) {
     return { error: "Usuário ou senha inválidos." }
+  }
+
+  // "Lembrar de mim": quando desmarcado, marca a sessão como somente-navegador
+  // (cookie sem expiração, descartado ao fechar o navegador). O proxy usa isso
+  // para não renovar a sessão em novos processos do navegador.
+  const store = await cookies()
+  if (remember) {
+    store.delete("session_only")
+  } else {
+    store.set("session_only", "1", { path: "/", httpOnly: true, sameSite: "lax" })
   }
 
   // Bloqueia acesso até um admin aprovar a conta.
@@ -65,9 +77,20 @@ export async function signUp(
   if (recoveryEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recoveryEmail))
     return { error: "Email de recuperação inválido." }
 
+  const admin = createAdminClient()
+
+  // Bloqueia email de recuperação já usado por outra conta.
+  if (recoveryEmail) {
+    const { data: dupe } = await admin
+      .from("profiles")
+      .select("id")
+      .filter("prefs->>recovery_email", "eq", recoveryEmail)
+      .maybeSingle()
+    if (dupe) return { error: "Este email já está em uso por outra conta." }
+  }
+
   // Cria o usuário já com email confirmado, porém pendente de aprovação.
   // Não cria sessão: só entra após um admin aprovar.
-  const admin = createAdminClient()
   const { data, error } = await admin.auth.admin.createUser({
     email: usernameToEmail(username),
     password,
