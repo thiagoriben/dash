@@ -102,11 +102,18 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   Histórico: History,
 }
 
-/** Abas organizadas por área — evita a fileira única de pílulas soltas. */
+/**
+ * Abas organizadas por área. Ordem prioriza o uso diário: primeiro o que se cria/
+ * registra no dia a dia (produtos, vendas, gastos, criativos, contas, caixa),
+ * depois análise, operação secundária e time.
+ */
 const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
-  { label: "Análise", tabs: ["Visão geral", "Funil", "DRE", "Histórico"] },
-  { label: "Financeiro", tabs: ["Caixa", "Vendas", "Recebíveis", "Gastos", "Repartição"] },
-  { label: "Operação", tabs: ["Produtos", "Criativos", "Contas de anúncio", "Calculadora", "Organização"] },
+  {
+    label: "Principal",
+    tabs: ["Visão geral", "Produtos", "Vendas", "Gastos", "Criativos", "Contas de anúncio", "Caixa"],
+  },
+  { label: "Financeiro", tabs: ["Recebíveis", "Repartição", "DRE"] },
+  { label: "Análise", tabs: ["Funil", "Calculadora", "Organização", "Histórico"] },
   { label: "Time", tabs: ["Colaboradores", "Chat"] },
 ]
 

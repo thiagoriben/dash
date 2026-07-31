@@ -5,9 +5,8 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import type { Profile } from "@/lib/types"
 import { useSidebar } from "@/components/app-shell"
-import { ApprovalsButton } from "@/components/approvals-button"
-import { CurrencyPopover } from "@/components/currency-popover"
-import { signOut } from "@/app/actions/auth"
+import { AdminMenu } from "@/components/admin-menu"
+import { LogoutButton } from "@/components/logout-button"
 import {
   LayoutDashboard,
   FolderKanban,
@@ -15,22 +14,19 @@ import {
   Wallet,
   CalendarClock,
   Settings,
-  CreditCard,
   Zap,
   PanelLeftClose,
   PanelLeftOpen,
-  LogOut,
   MessageSquare,
   Trophy,
   StickyNote,
   ListTodo,
-  Calculator,
   ShieldCheck,
 } from "lucide-react"
 
 type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }
 
-// Navegação agrupada por finalidade. Ordem: uso diário no topo, ajustes/admin embaixo.
+// Navegação agrupada por finalidade. Sem scroll — todas as opções visíveis.
 const principal: Item[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
@@ -46,37 +42,22 @@ const financeiro: Item[] = [
   { href: "/caixa", label: "Caixa", icon: Wallet },
   { href: "/recebiveis", label: "Recebíveis", icon: CalendarClock },
 ]
-// Organização: cada ferramenta como item próprio (atalhos agora ficam dentro dos projetos).
+// Organização: cada ferramenta como item próprio (calculadora agora só dentro do projeto).
 const organizacao: Item[] = [
   { href: "/organizacao/notas", label: "Notas", icon: StickyNote },
   { href: "/organizacao/tarefas", label: "Tarefas", icon: ListTodo },
 ]
-// Ferramentas avulsas.
-const ferramentas: Item[] = [{ href: "/calculadora", label: "Calculadora", icon: Calculator }]
 
 export function Sidebar({
   profile,
   pending = [],
-  usdBrl = 5,
-  fxOverrides = {},
-  fxCurrencies = ["USD", "EUR"],
 }: {
   profile: Profile | null
   pending?: Profile[]
-  usdBrl?: number
-  fxOverrides?: Record<string, number>
-  fxCurrencies?: string[]
 }) {
   const pathname = usePathname()
   const { collapsed, toggle } = useSidebar()
   const isAdmin = profile?.role === "admin"
-
-  const config: Item[] = [
-    { href: "/config", label: "Configurações", icon: Settings, exact: true },
-    { href: "/config/gateways", label: "Gateways", icon: CreditCard },
-  ]
-  // Tudo que é função de administrador fica reunido em uma única seção "Admin".
-  const admin: Item[] = isAdmin ? [{ href: "/usuarios", label: "Usuários", icon: Users }] : []
 
   return (
     <aside
@@ -92,7 +73,7 @@ export function Sidebar({
         {!collapsed && <span className="font-display text-lg font-semibold neon-text">Dash</span>}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-2">
+      <nav className="flex flex-1 flex-col gap-0.5 px-3 py-2">
         <NavGroup items={principal} pathname={pathname} collapsed={collapsed} />
         <NavLabel collapsed={collapsed}>Social</NavLabel>
         <NavGroup items={social} pathname={pathname} collapsed={collapsed} />
@@ -100,10 +81,6 @@ export function Sidebar({
         <NavGroup items={financeiro} pathname={pathname} collapsed={collapsed} />
         <NavLabel collapsed={collapsed}>Organização</NavLabel>
         <NavGroup items={organizacao} pathname={pathname} collapsed={collapsed} />
-        <NavLabel collapsed={collapsed}>Ferramentas</NavLabel>
-        <NavGroup items={ferramentas} pathname={pathname} collapsed={collapsed} />
-        <NavLabel collapsed={collapsed}>Ajustes</NavLabel>
-        <NavGroup items={config} pathname={pathname} collapsed={collapsed} />
         {isAdmin && (
           <>
             <NavLabel collapsed={collapsed}>
@@ -111,48 +88,28 @@ export function Sidebar({
                 <ShieldCheck size={12} /> Admin
               </span>
             </NavLabel>
-            {/* Aprovações de novas contas — função de admin, agrupada aqui. */}
-            <ApprovalsButton pending={pending} collapsed={collapsed} />
-            <NavGroup items={admin} pathname={pathname} collapsed={collapsed} />
+            <AdminMenu pending={pending} collapsed={collapsed} />
           </>
         )}
       </nav>
 
       <div className="flex flex-col gap-2 border-t border-[color:var(--color-border)] p-3">
-        <CurrencyPopover
-          usdBrl={usdBrl}
-          currencies={fxCurrencies}
-          overrides={fxOverrides}
-          collapsed={collapsed}
-        />
-
-        <button
-          onClick={toggle}
-          aria-label={collapsed ? "Expandir barra lateral" : "Recolher barra lateral"}
-          title={collapsed ? "Expandir" : "Recolher"}
-          className={cn(
-            "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-foreground",
-            collapsed ? "justify-center px-0" : "justify-start",
-          )}
-        >
-          {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-          {!collapsed && "Recolher"}
-        </button>
-
-        <form action={signOut}>
+        {/* Recolher + Sair lado a lado, acima do perfil */}
+        <div className={cn("flex items-center gap-2", collapsed ? "flex-col" : "justify-between")}>
           <button
-            type="submit"
-            aria-label="Sair"
-            title="Sair"
+            onClick={toggle}
+            aria-label={collapsed ? "Expandir barra lateral" : "Recolher barra lateral"}
+            title={collapsed ? "Expandir" : "Recolher"}
             className={cn(
-              "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-danger/10 hover:text-danger",
-              collapsed ? "justify-center px-0" : "justify-start",
+              "flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-foreground",
+              collapsed ? "w-full justify-center px-0" : "flex-1 justify-start",
             )}
           >
-            <LogOut size={18} />
-            {!collapsed && "Sair"}
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            {!collapsed && "Recolher"}
           </button>
-        </form>
+          <LogoutButton collapsed={collapsed} />
+        </div>
 
         <Link
           href="/perfil"

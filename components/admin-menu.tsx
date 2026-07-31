@@ -1,21 +1,22 @@
 "use client"
 
 import { useState, useRef, useEffect, useTransition } from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import type { Profile } from "@/lib/types"
 import { approveUser, rejectUser } from "@/app/actions/users"
 import { cn } from "@/lib/utils"
-import { UserCheck, Check, X } from "lucide-react"
+import { ShieldCheck, Check, X, Users, UserCheck } from "lucide-react"
 
-export function ApprovalsButton({
-  pending,
-  collapsed,
-}: {
-  pending: Profile[]
-  collapsed: boolean
-}) {
+/**
+ * Menu único de administração na sidebar. Reúne, num só ícone, tudo que é
+ * função de admin: solicitações de acesso (aprovar/rejeitar) e atalhos de gestão.
+ */
+export function AdminMenu({ pending, collapsed }: { pending: Profile[]; collapsed: boolean }) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
+  const pathname = usePathname()
   const count = pending.length
 
   useEffect(() => {
@@ -26,37 +27,39 @@ export function ApprovalsButton({
     return () => document.removeEventListener("mousedown", onDoc)
   }, [open])
 
+  const links = [{ href: "/usuarios", label: "Usuários", icon: Users }]
+
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        aria-label="Solicitações de acesso"
-        title="Solicitações de acesso"
+        aria-label="Administração"
+        title="Administração"
         className={cn(
-          "relative flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-foreground",
+          "relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-white/5 hover:text-foreground",
           collapsed && "justify-center px-0",
         )}
       >
         <span className="relative">
-          <UserCheck size={18} />
+          <ShieldCheck size={18} />
           {count > 0 && (
             <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-negative px-1 text-[10px] font-bold text-white">
               {count}
             </span>
           )}
         </span>
-        {!collapsed && "Solicitações"}
+        {!collapsed && "Admin"}
       </button>
 
       {open && (
         <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-2xl border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-2)] p-2 shadow-2xl">
-          <div className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-            Solicitações de acesso
+          <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+            <UserCheck size={13} /> Solicitações de acesso
           </div>
           {count === 0 ? (
-            <p className="px-2 py-3 text-sm text-muted">Nenhuma pendência.</p>
+            <p className="px-2 pb-2 pt-1 text-sm text-muted">Nenhuma pendência.</p>
           ) : (
-            <ul className="flex flex-col gap-1">
+            <ul className="mb-1 flex flex-col gap-1">
               {pending.map((p) => (
                 <li
                   key={p.id}
@@ -85,6 +88,27 @@ export function ApprovalsButton({
               ))}
             </ul>
           )}
+
+          <div className="my-1 border-t border-border" />
+
+          {links.map((l) => {
+            const Icon = l.icon
+            const active = pathname === l.href || pathname.startsWith(l.href + "/")
+            return (
+              <Link
+                key={l.href}
+                href={l.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-xl px-2 py-2 text-sm font-medium transition-colors",
+                  active ? "bg-primary/10 text-primary" : "text-muted hover:bg-white/5 hover:text-foreground",
+                )}
+              >
+                <Icon size={16} />
+                {l.label}
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>

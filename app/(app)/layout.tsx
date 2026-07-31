@@ -5,17 +5,10 @@ import { Topbar } from "@/components/topbar"
 import { MobileNav } from "@/components/mobile-nav"
 import { AppShell } from "@/components/app-shell"
 import { getCurrentProfile, getPendingProfiles } from "@/lib/data"
-import { getUsdBrlRate } from "@/lib/currency-server"
-import { getCurrencyOverrides, getTrackedCurrencies } from "@/app/actions/currency"
 import { markDailyAccess } from "@/lib/activity"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [profile, usdBrl, fxOverrides, fxCurrencies] = await Promise.all([
-    getCurrentProfile(),
-    getUsdBrlRate(),
-    getCurrencyOverrides(),
-    getTrackedCurrencies(),
-  ])
+  const profile = await getCurrentProfile()
 
   // Gate de aprovação: conta pendente não acessa o app.
   if (profile && !profile.approved) redirect("/aguardando")
@@ -39,13 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell
       initialCollapsed={collapsed}
       sidebar={
-        <Sidebar
-          profile={profile}
-          pending={pending}
-          usdBrl={usdBrl}
-          fxOverrides={fxOverrides}
-          fxCurrencies={fxCurrencies}
-        />
+        <Sidebar profile={profile} pending={pending} />
       }
       topbar={
         <Suspense fallback={<div className="h-16 border-b border-[color:var(--color-border)]" />}>

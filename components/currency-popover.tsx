@@ -17,12 +17,15 @@ export function CurrencyPopover({
   currencies = ["USD", "EUR"],
   overrides = {},
   collapsed,
+  placement = "up",
 }: {
   usdBrl: number
   currencies?: string[]
   /** Cotações manuais salvas por moeda (BRL por 1 unidade). */
   overrides?: Record<string, number>
   collapsed: boolean
+  /** Direção de abertura do popover. "up" na sidebar, "down" quando embutido em página. */
+  placement?: "up" | "down"
 }) {
   const router = useRouter()
   const ref = useRef<HTMLDivElement>(null)
@@ -140,7 +143,12 @@ export function CurrencyPopover({
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 w-80 rounded-2xl border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-2)] p-3 shadow-2xl">
+        <div
+          className={cn(
+            "absolute left-0 z-50 w-80 rounded-2xl border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-2)] p-3 shadow-2xl",
+            placement === "up" ? "bottom-full mb-2" : "top-full mt-2",
+          )}
+        >
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">Câmbio (BRL base)</span>
             <button

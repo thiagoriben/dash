@@ -13,7 +13,7 @@ export function MobileNav({ profile: _profile }: { profile: Profile | null }) {
     { href: "/projetos", label: "Projetos", icon: FolderKanban, exact: false },
     { href: "/caixa", label: "Caixa", icon: Wallet, exact: false },
     { href: "/recebiveis", label: "Recebíveis", icon: CalendarClock, exact: false },
-    { href: "/config", label: "Config", icon: Settings, exact: false },
+    { href: "/perfil", label: "Perfil", icon: Settings, exact: false },
   ]
 
   return (
