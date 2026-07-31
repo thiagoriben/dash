@@ -52,10 +52,7 @@ export function UsersClient({
           })
         },
       )
-      .subscribe((status, err) => {
-        console.log("[v0] admin-profiles channel status:", status, err ?? "")
-        setLive(status === "SUBSCRIBED")
-      })
+      .subscribe((status) => setLive(status === "SUBSCRIBED"))
     return () => {
       void supabase.removeChannel(channel)
     }
