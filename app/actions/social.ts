@@ -514,7 +514,7 @@ const TTL_MINUTES: Record<string, number> = {
   "15d": 60 * 24 * 15,
   "30d": 60 * 24 * 30,
 }
-export const DEFAULT_TTL = "15d"
+const DEFAULT_TTL = "15d"
 
 function expiryFromTtl(ttl: string): string | null {
   const mins = TTL_MINUTES[ttl] ?? TTL_MINUTES[DEFAULT_TTL]

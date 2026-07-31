@@ -368,6 +368,10 @@ export type Note = {
   visibility: "privado" | "compartilhado"
   created_at: string
   updated_at: string
+  // Enriquecido em runtime (notas pessoais):
+  shared_with?: string[] // ids de amigos com quem eu compartilhei (quando sou dono)
+  shared_by_me?: boolean // true quando a nota é minha e está compartilhada
+  shared_from?: { id: string; name: string } | null // dono, quando a nota foi compartilhada COMIGO
 }
 
 export type TodoDueKind = "hoje" | "amanha" | "sem_prazo"

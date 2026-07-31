@@ -691,13 +691,61 @@ export async function getShortcuts(ownerId: string, projectId: string | null): P
   return (data ?? []) as Shortcut[]
 }
 
-/** Notas de um escopo. */
+/** Notas de um escopo. Para o escopo pessoal, inclui notas compartilhadas comigo por amigos. */
 export async function getNotes(ownerId: string, projectId: string | null): Promise<Note[]> {
   const supabase = await createClient()
-  let q = supabase.from("notes").select("*").order("updated_at", { ascending: false })
-  q = projectId ? q.eq("project_id", projectId) : q.is("project_id", null).eq("owner_id", ownerId)
-  const { data } = await q
-  return (data ?? []) as Note[]
+
+  if (projectId) {
+    const { data } = await supabase
+      .from("notes")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("updated_at", { ascending: false })
+    return (data ?? []) as Note[]
+  }
+
+  // --- Escopo pessoal ---
+  // 1) Minhas notas + com quem compartilhei.
+  const { data: mine } = await supabase
+    .from("notes")
+    .select("*, note_shares(shared_with)")
+    .is("project_id", null)
+    .eq("owner_id", ownerId)
+    .order("updated_at", { ascending: false })
+
+  const myNotes: Note[] = ((mine ?? []) as any[]).map((n) => {
+    const shares = (n.note_shares ?? []) as { shared_with: string }[]
+    const { note_shares, ...rest } = n
+    return {
+      ...(rest as Note),
+      shared_with: shares.map((s) => s.shared_with),
+      shared_by_me: shares.length > 0,
+      shared_from: null,
+    }
+  })
+
+  // 2) Notas que amigos compartilharam comigo (RLS já garante o acesso).
+  const { data: sharedRows } = await supabase
+    .from("note_shares")
+    .select("note:notes(*, owner:profiles!notes_owner_id_fkey(id, full_name, username))")
+    .eq("shared_with", ownerId)
+
+  const sharedNotes: Note[] = ((sharedRows ?? []) as any[])
+    .map((r) => r.note)
+    .filter((n) => n && !n.project_id)
+    .map((n) => {
+      const owner = n.owner as { id: string; full_name: string | null; username: string | null } | null
+      const { owner: _o, ...rest } = n
+      return {
+        ...(rest as Note),
+        shared_from: owner ? { id: owner.id, name: owner.full_name || owner.username || "Amigo" } : null,
+      }
+    })
+
+  // Dedup por id (por segurança) e ordena por atualização.
+  const byId = new Map<string, Note>()
+  for (const n of [...myNotes, ...sharedNotes]) byId.set(n.id, n)
+  return Array.from(byId.values()).sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
 }
 
 /** Itens de to-do de um escopo. */

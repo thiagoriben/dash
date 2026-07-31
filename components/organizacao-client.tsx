@@ -46,6 +46,8 @@ const KIND_META: Record<ShortcutKind, { label: string; icon: typeof Link2 }> = {
 
 type Tab = "atalhos" | "notas" | "tarefas"
 
+export type FriendOption = { id: string; name: string }
+
 export function OrganizacaoClient({
   projectId,
   categories,
@@ -53,6 +55,8 @@ export function OrganizacaoClient({
   notes,
   todos = [],
   members = [],
+  friends = [],
+  meId,
   embedded = false,
   only,
   title,
@@ -64,6 +68,10 @@ export function OrganizacaoClient({
   notes: Note[]
   todos?: TodoItem[]
   members?: Profile[]
+  /** Amigos aceitos, para compartilhar notas pessoais. */
+  friends?: FriendOption[]
+  /** Id do usuário logado, para distinguir notas próprias das compartilhadas comigo. */
+  meId?: string
   embedded?: boolean
   /** Renderiza apenas uma ferramenta, sem a barra de abas (usado nas rotas dedicadas). */
   only?: Tab
@@ -183,15 +191,20 @@ export function OrganizacaoClient({
           {notes.length === 0 ? (
             <p className="text-sm text-muted">Nenhuma nota ainda.</p>
           ) : (
-            notes.map((n) => (
-              <NoteCard
-                key={n.id}
-                note={n}
-                category={categories.find((c) => c.id === n.category_id) ?? null}
-                onEdit={() => setNoteModal({ open: true, edit: n })}
-                onDelete={() => deleteNote(n.id)}
-              />
-            ))
+            notes.map((n) => {
+              const mine = !meId || n.owner_id === meId
+              return (
+                <NoteCard
+                  key={n.id}
+                  note={n}
+                  category={categories.find((c) => c.id === n.category_id) ?? null}
+                  friends={friends}
+                  mine={mine}
+                  onEdit={mine ? () => setNoteModal({ open: true, edit: n }) : undefined}
+                  onDelete={mine ? () => deleteNote(n.id) : undefined}
+                />
+              )
+            })
           )}
         </div>
       )}
@@ -212,6 +225,7 @@ export function OrganizacaoClient({
         onClose={() => setNoteModal({ open: false })}
         projectId={projectId}
         categories={categories}
+        friends={friends}
       />
     </div>
   )
@@ -336,19 +350,38 @@ function ShortcutRow({
 function NoteCard({
   note,
   category,
+  friends = [],
+  mine = true,
   onEdit,
   onDelete,
 }: {
   note: Note
   category: ShortcutCategory | null
-  onEdit: () => void
-  onDelete: () => Promise<{ ok?: boolean; error?: string }>
+  friends?: FriendOption[]
+  mine?: boolean
+  onEdit?: () => void
+  onDelete?: () => Promise<{ ok?: boolean; error?: string }>
 }) {
+  // Rótulo do badge conforme quem é o dono e o estado de compartilhamento.
+  const sharedCount = note.shared_with?.length ?? 0
+  const nameOf = (id: string) => friends.find((f) => f.id === id)?.name
+  const shareLabel = (() => {
+    if (!mine && note.shared_from) return `De ${note.shared_from.name}`
+    if (mine && sharedCount > 0) {
+      if (sharedCount === 1) {
+        const only = note.shared_with![0]
+        return `Com ${nameOf(only) ?? "1 amigo"}`
+      }
+      return `Com ${sharedCount} amigos`
+    }
+    return null
+  })()
+
   return (
-    <Card className="flex flex-col gap-2 p-4">
+    <Card className={cn("flex flex-col gap-2 p-4", !mine && "border-primary/25 bg-primary/[0.03]")}>
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-display text-sm font-semibold text-foreground">{note.title}</h3>
-        <RowActions onEdit={onEdit} onDelete={onDelete} />
+        {mine ? <RowActions onEdit={onEdit} onDelete={onDelete} /> : null}
       </div>
       {note.body ? (
         <p className="line-clamp-5 whitespace-pre-wrap text-sm text-muted">{note.body}</p>
@@ -362,10 +395,17 @@ function NoteCard({
             {category.name}
           </Badge>
         )}
-        <Badge tone={note.visibility === "compartilhado" ? "primary" : "default"}>
-          {note.visibility === "compartilhado" ? <Users size={11} /> : <Lock size={11} />}
-          {note.visibility === "compartilhado" ? "Compartilhada" : "Privada"}
-        </Badge>
+        {shareLabel ? (
+          <Badge tone="primary">
+            <Users size={11} />
+            {shareLabel}
+          </Badge>
+        ) : (
+          <Badge tone="default">
+            <Lock size={11} />
+            Privada
+          </Badge>
+        )}
       </div>
     </Card>
   )
@@ -506,14 +546,27 @@ function NoteModal({
   onClose,
   projectId,
   categories,
+  friends = [],
 }: {
   state: { open: boolean; edit?: Note }
   onClose: () => void
   projectId: string | null
   categories: ShortcutCategory[]
+  friends?: FriendOption[]
 }) {
   const { pending, error, run } = useFormAction(onClose)
   const edit = state.edit
+  // Compartilhamento só existe para notas pessoais (fora de projeto).
+  const personal = projectId === null
+  const [selected, setSelected] = React.useState<string[]>([])
+
+  React.useEffect(() => {
+    if (state.open) setSelected(edit?.shared_with ?? [])
+  }, [state.open, edit])
+
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+
   return (
     <Modal open={state.open} onClose={onClose} title={edit ? "Editar nota" : "Nova nota"}>
       <form
@@ -523,27 +576,61 @@ function NoteModal({
         <Field label="Título">
           <Input name="title" defaultValue={edit?.title ?? ""} placeholder="Ex.: Ideias de criativo" required autoFocus />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Categoria">
-            <Select name="category_id" defaultValue={edit?.category_id ?? ""}>
-              <option value="">Sem categoria</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Visibilidade">
-            <Select name="visibility" defaultValue={edit?.visibility ?? "privado"}>
-              <option value="privado">Privada</option>
-              <option value="compartilhado">Compartilhada</option>
-            </Select>
-          </Field>
-        </div>
+        <Field label="Categoria">
+          <Select name="category_id" defaultValue={edit?.category_id ?? ""}>
+            <option value="">Sem categoria</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <Field label="Conteúdo">
           <Textarea name="body" defaultValue={edit?.body ?? ""} className="min-h-32" placeholder="Escreva sua nota..." />
         </Field>
+
+        {personal && (
+          <div className="flex flex-col gap-2">
+            {/* CSV com os ids selecionados, lido pela server action. */}
+            <input type="hidden" name="shared_with" value={selected.join(",")} />
+            <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <Users size={14} className="text-primary" />
+              Compartilhar com amigos
+            </div>
+            {friends.length === 0 ? (
+              <p className="text-xs text-muted">
+                Você ainda não tem amigos. Adicione amigos em Amigos para poder compartilhar notas.
+              </p>
+            ) : (
+              <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)]/50 p-2">
+                {friends.map((f) => {
+                  const on = selected.includes(f.id)
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => toggle(f.id)}
+                      className={cn(
+                        "flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                        on ? "bg-primary/15 text-primary" : "text-muted hover:bg-white/5 hover:text-foreground",
+                      )}
+                    >
+                      <span className="truncate">{f.name}</span>
+                      {on ? <Check size={14} /> : null}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-xs text-muted">
+              {selected.length === 0
+                ? "Nota privada — só você vê."
+                : `Compartilhada com ${selected.length} ${selected.length === 1 ? "amigo" : "amigos"}.`}
+            </p>
+          </div>
+        )}
+
         {error && <p className="text-sm text-negative">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
