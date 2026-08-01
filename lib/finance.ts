@@ -16,7 +16,14 @@ export function fmtDate(value: string | Date | null | undefined) {
   if (!value) return "—"
   const d = typeof value === "string" ? new Date(value + (value.length === 10 ? "T00:00:00" : "")) : value
   if (Number.isNaN(d.getTime())) return "—"
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
+  // Timezone fixo: servidor (UTC) e cliente geram a MESMA string, evitando
+  // hydration mismatch (React #418).
+  return d.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo",
+  })
 }
 export function roas(revenue: number, spend: number) {
   return safeDiv(revenue, spend)

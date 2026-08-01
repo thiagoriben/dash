@@ -140,7 +140,7 @@ function FeedbackRow({ item }: { item: FeedbackView }) {
               </>
             )}
             <span className="text-[10px] text-muted">
-              {new Date(item.created_at).toLocaleString("pt-BR")}
+              {new Date(item.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
             </span>
           </div>
         </div>

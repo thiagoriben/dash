@@ -20,7 +20,12 @@ const TTL_OPTIONS: { value: string; label: string }[] = [
 ]
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+  // Timezone fixo para o horário renderizado no servidor bater com o do cliente.
+  return new Date(iso).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  })
 }
 
 function ttlLabelFor(m: DirectMessage): string | null {
@@ -55,7 +60,11 @@ export function ChatClient({
   const [ttl, setTtl] = useState<string>("15d")
   const [unread, setUnread] = useState<Record<string, number>>(unreadByPartner)
   const [pending, startTransition] = useTransition()
+  const [mounted, setMounted] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Rótulos relativos (Date.now) só depois de montar, evitando mismatch de SSR.
+  useEffect(() => setMounted(true), [])
 
   const active = partners.find((p) => p.id === activeId) ?? null
 
@@ -223,7 +232,7 @@ export function ChatClient({
                 ) : (
                   messages.map((m) => {
                     const mine = m.sender_id === meId
-                    const ttlLabel = ttlLabelFor(m)
+                    const ttlLabel = mounted ? ttlLabelFor(m) : null
                     return (
                       <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
                         <div

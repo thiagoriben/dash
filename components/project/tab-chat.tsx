@@ -202,7 +202,7 @@ export function TabChat({
                       </span>
                     )}
                     <span>
-                      {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
                     </span>
                     {mine &&
                       (readers >= audience && audience > 0 ? (

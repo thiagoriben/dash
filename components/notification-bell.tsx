@@ -172,7 +172,7 @@ export function NotificationBell({
                       </span>
                       {n.body && <span className="line-clamp-2 text-xs text-muted">{n.body}</span>}
                       <span className="text-[10px] text-muted">
-                        {new Date(n.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(n.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
                       </span>
                     </span>
                   </button>
