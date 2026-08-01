@@ -64,6 +64,7 @@ export function OrganizacaoClient({
   description,
   reminders = {},
   notifEnabled = true,
+  projectOptions = [],
 }: {
   projectId: string | null
   categories: ShortcutCategory[]
@@ -75,6 +76,8 @@ export function OrganizacaoClient({
   reminders?: Record<string, { time?: string; lead?: number }>
   /** Lembretes de tarefas habilitados nas configurações. */
   notifEnabled?: boolean
+  /** Projetos aos quais notas/tarefas podem ser atribuídas (páginas globais). */
+  projectOptions?: { id: string; name: string }[]
   /** Amigos aceitos, para compartilhar notas pessoais. */
   friends?: FriendOption[]
   /** Id do usuário logado, para distinguir notas próprias das compartilhadas comigo. */
@@ -159,6 +162,7 @@ export function OrganizacaoClient({
           members={members}
           reminders={reminders}
           notifEnabled={notifEnabled}
+          projectOptions={projectOptions}
         />
       ) : empty ? (
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
@@ -206,6 +210,8 @@ export function OrganizacaoClient({
           ) : (
             notes.map((n) => {
               const mine = !meId || n.owner_id === meId
+              // Em projeto, qualquer membro pode editar/excluir (RLS garante o acesso).
+              const canManage = mine || projectId !== null
               return (
                 <NoteCard
                   key={n.id}
@@ -213,8 +219,8 @@ export function OrganizacaoClient({
                   category={categories.find((c) => c.id === n.category_id) ?? null}
                   friends={friends}
                   mine={mine}
-                  onEdit={mine ? () => setNoteModal({ open: true, edit: n }) : undefined}
-                  onDelete={mine ? () => deleteNote(n.id) : undefined}
+                  onEdit={canManage ? () => setNoteModal({ open: true, edit: n }) : undefined}
+                  onDelete={canManage ? () => deleteNote(n.id) : undefined}
                 />
               )
             })
@@ -239,6 +245,7 @@ export function OrganizacaoClient({
         projectId={projectId}
         categories={categories}
         friends={friends}
+        projectOptions={projectOptions}
       />
     </div>
   )
@@ -582,22 +589,35 @@ function NoteModal({
   projectId,
   categories,
   friends = [],
+  projectOptions = [],
 }: {
   state: { open: boolean; edit?: Note }
   onClose: () => void
   projectId: string | null
   categories: ShortcutCategory[]
   friends?: FriendOption[]
+  /** Projetos aos quais a nota pode ser atribuída (páginas globais). */
+  projectOptions?: { id: string; name: string }[]
 }) {
   const { pending, error, run } = useFormAction(onClose)
   const edit = state.edit
-  // Compartilhamento só existe para notas pessoais (fora de projeto).
-  const personal = projectId === null
   const [selected, setSelected] = React.useState<string[]>([])
+  // Escopo escolhido: "" = pessoal, senão id do projeto. Começa no escopo atual.
+  const [scope, setScope] = React.useState<string>(projectId ?? "")
 
   React.useEffect(() => {
-    if (state.open) setSelected(edit?.shared_with ?? [])
-  }, [state.open, edit])
+    if (state.open) {
+      setSelected(edit?.shared_with ?? [])
+      setScope(projectId ?? "")
+    }
+  }, [state.open, edit, projectId])
+
+  const showScopePicker = projectOptions.length > 0
+  const scopeChanged = scope !== (projectId ?? "")
+  // Compartilhar só quando a nota é/continua pessoal.
+  const personal = scope === ""
+  // Categoria só faz sentido no escopo atual (ao trocar de escopo ela é zerada).
+  const showCategory = !scopeChanged
 
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -605,22 +625,38 @@ function NoteModal({
   return (
     <Modal open={state.open} onClose={onClose} title={edit ? "Editar nota" : "Nova nota"}>
       <form
-        action={(fd) => run(() => (edit ? updateNote(edit.id, fd) : createNote(projectId, fd)))}
+        action={(fd) => run(() => (edit ? updateNote(edit.id, fd) : createNote(scope || null, fd)))}
         className="flex flex-col gap-4"
       >
         <Field label="Título">
           <Input name="title" defaultValue={edit?.title ?? ""} placeholder="Ex.: Ideias de criativo" required autoFocus />
         </Field>
-        <Field label="Categoria">
-          <Select name="category_id" defaultValue={edit?.category_id ?? ""}>
-            <option value="">Sem categoria</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {/* Ao editar, envia o escopo escolhido para a server action mover a nota. */}
+        {edit && <input type="hidden" name="project_id" value={scope} />}
+        {showScopePicker && (
+          <Field label="Atribuir a" hint="Escolha um projeto ou deixe como nota pessoal.">
+            <Select value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="">Pessoal</option>
+              {projectOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        {showCategory && (
+          <Field label="Categoria">
+            <Select name="category_id" defaultValue={edit?.category_id ?? ""}>
+              <option value="">Sem categoria</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <Field label="Conteúdo">
           <Textarea name="body" defaultValue={edit?.body ?? ""} className="min-h-32" placeholder="Escreva sua nota..." />
         </Field>

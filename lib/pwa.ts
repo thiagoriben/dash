@@ -55,14 +55,18 @@ export type ScheduledReminder = {
   body: string
 }
 
-// Timers ativos em memória (a aba precisa estar aberta para dispararem).
-const timers = new Map<string, ReturnType<typeof setTimeout>>()
+// Timers ativos em memória, por namespace (a aba precisa estar aberta para dispararem).
+// O namespace evita que quadros diferentes (pessoal, cada projeto) apaguem os
+// lembretes uns dos outros ao remontar.
+const timersByNs = new Map<string, Map<string, ReturnType<typeof setTimeout>>>()
 
-/** (Re)agenda os lembretes fornecidos, cancelando os antigos. */
-export function scheduleReminders(reminders: ScheduledReminder[]) {
+/** (Re)agenda os lembretes de um namespace, cancelando só os daquele namespace. */
+export function scheduleReminders(reminders: ScheduledReminder[], namespace = "default") {
   if (typeof window === "undefined") return
+  const timers = timersByNs.get(namespace) ?? new Map<string, ReturnType<typeof setTimeout>>()
   for (const t of timers.values()) clearTimeout(t)
   timers.clear()
+  timersByNs.set(namespace, timers)
   const now = Date.now()
   for (const r of reminders) {
     const delay = r.at - now

@@ -784,3 +784,66 @@ export async function getTodos(ownerId: string, projectId: string | null): Promi
   const { data } = await q
   return (data ?? []) as TodoItem[]
 }
+
+/* ---------- Notas / tarefas de MÚLTIPLOS projetos (páginas globais) ---------- */
+
+/** Notas de vários projetos de uma vez (RLS garante o acesso por membership). */
+export async function getNotesForProjects(projectIds: string[]): Promise<Note[]> {
+  if (projectIds.length === 0) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("notes")
+    .select("*")
+    .in("project_id", projectIds)
+    .order("updated_at", { ascending: false })
+  return (data ?? []) as Note[]
+}
+
+/** Tarefas de vários projetos de uma vez. */
+export async function getTodosForProjects(projectIds: string[]): Promise<TodoItem[]> {
+  if (projectIds.length === 0) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("todo_items")
+    .select("*")
+    .in("project_id", projectIds)
+    .order("position", { ascending: true })
+    .order("created_at")
+  return (data ?? []) as TodoItem[]
+}
+
+/** Categorias de atalhos/notas de vários projetos. */
+export async function getShortcutCategoriesForProjects(projectIds: string[]): Promise<ShortcutCategory[]> {
+  if (projectIds.length === 0) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("shortcut_categories")
+    .select("*")
+    .in("project_id", projectIds)
+    .order("position", { ascending: true })
+  return (data ?? []) as ShortcutCategory[]
+}
+
+/** Membros (sócios) de vários projetos, agrupados por project_id. Inclui o dono. */
+export async function getMembersForProjects(projectIds: string[]): Promise<Record<string, Profile[]>> {
+  const out: Record<string, Profile[]> = {}
+  if (projectIds.length === 0) return out
+  const supabase = await createClient()
+  const seen: Record<string, Set<string>> = {}
+  const add = (pid: string, prof: Profile | null) => {
+    if (!prof) return
+    const set = (seen[pid] ??= new Set())
+    if (set.has(prof.id)) return
+    set.add(prof.id)
+    ;(out[pid] ??= []).push(prof)
+  }
+
+  const [membersRes, ownersRes] = await Promise.all([
+    supabase.from("project_members").select("project_id, profile:profiles(*)").in("project_id", projectIds),
+    supabase.from("projects").select("id, owner:profiles(*)").in("id", projectIds),
+  ])
+  for (const row of (ownersRes.data ?? []) as any[]) add(row.id as string, (row.owner ?? null) as Profile | null)
+  for (const row of (membersRes.data ?? []) as any[])
+    add(row.project_id as string, (row.profile ?? null) as Profile | null)
+  return out
+}

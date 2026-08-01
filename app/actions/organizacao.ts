@@ -207,10 +207,21 @@ export async function updateNote(id: string, formData: FormData) {
   if (body != null) patch.body = String(body).trim() || null
   if (categoryId != null) patch.category_id = String(categoryId).trim() || null
 
-  // Compartilhamento só se aplica a notas pessoais.
-  const hasShareField = formData.has("shared_with")
   const { data: noteRow } = await supabase.from("notes").select("project_id, owner_id").eq("id", id).maybeSingle()
-  const isPersonal = noteRow && !noteRow.project_id
+
+  // Atribuir/mover a nota a um projeto (ou de volta ao pessoal).
+  const hasScopeField = formData.has("project_id")
+  const newScope = hasScopeField ? String(formData.get("project_id") ?? "").trim() || null : undefined
+  const scopeChanged = hasScopeField && newScope !== (noteRow?.project_id ?? null)
+  if (scopeChanged) {
+    patch.project_id = newScope
+    patch.category_id = null // categorias são por escopo; zera ao trocar
+    patch.visibility = "privado" // some do compartilhamento pessoal ao virar de projeto
+  }
+
+  // Compartilhamento só se aplica a notas pessoais que continuam pessoais.
+  const hasShareField = formData.has("shared_with")
+  const isPersonal = noteRow && !noteRow.project_id && !scopeChanged
   if (hasShareField && isPersonal) {
     const friendIds = parseSharedWith(formData)
     patch.visibility = friendIds.length > 0 ? "compartilhado" : "privado"

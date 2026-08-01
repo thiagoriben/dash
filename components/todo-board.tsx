@@ -86,6 +86,7 @@ export function TodoBoard({
   members = [],
   reminders = {},
   notifEnabled = true,
+  projectOptions = [],
 }: {
   projectId: string | null
   todos: TodoItem[]
@@ -94,13 +95,17 @@ export function TodoBoard({
   reminders?: ReminderMap
   /** Se o usuário habilitou lembretes de tarefas nas configurações. */
   notifEnabled?: boolean
+  /** Projetos aos quais a tarefa pode ser atribuída (páginas globais). */
+  projectOptions?: { id: string; name: string }[]
 }) {
   const [pending, startTransition] = React.useTransition()
 
   // Agenda notificações locais das tarefas com horário definido (aba precisa estar aberta).
+  // Namespace por escopo para não apagar os lembretes de outros quadros na mesma página.
+  const reminderNs = `todos:${projectId ?? "pessoal"}`
   React.useEffect(() => {
     if (!notifEnabled) {
-      scheduleReminders([])
+      scheduleReminders([], reminderNs)
       return
     }
     const list: ScheduledReminder[] = []
@@ -118,8 +123,8 @@ export function TodoBoard({
         body: t.title,
       })
     }
-    scheduleReminders(list)
-  }, [todos, reminders, notifEnabled])
+    scheduleReminders(list, reminderNs)
+  }, [todos, reminders, notifEnabled, reminderNs])
 
   const [showDone, setShowDone] = React.useState(false)
   const [areaFilter, setAreaFilter] = React.useState<string>("todas")
@@ -244,6 +249,7 @@ export function TodoBoard({
         members={members}
         areas={areas}
         reminder={modal.edit ? reminders[modal.edit.id] : undefined}
+        projectOptions={projectOptions}
       />
     </div>
   )
@@ -393,6 +399,7 @@ function TodoModal({
   members,
   areas,
   reminder,
+  projectOptions = [],
 }: {
   state: { open: boolean; edit?: TodoItem }
   onClose: () => void
@@ -400,14 +407,26 @@ function TodoModal({
   members: Profile[]
   areas: string[]
   reminder?: { time?: string; lead?: number }
+  projectOptions?: { id: string; name: string }[]
 }) {
   const [pending, startTransition] = React.useTransition()
   const [error, setError] = React.useState<string | null>(null)
   const edit = state.edit
+  // Escopo: "" = pessoal, senão id do projeto. Começa no escopo atual do quadro.
+  const [scope, setScope] = React.useState<string>(projectId ?? "")
+  React.useEffect(() => {
+    if (state.open) setScope(projectId ?? "")
+  }, [state.open, projectId])
+
+  const showScopePicker = projectOptions.length > 0
+  const scopeUnchanged = scope === (projectId ?? "")
+  // Responsável só quando a tarefa está no projeto atual do quadro (que conhece os membros).
+  const showAssignee = scopeUnchanged && scope !== "" && members.length > 0
+
   const run = (fd: FormData) => {
     setError(null)
     startTransition(async () => {
-      const res = edit ? await updateTodo(edit.id, fd) : await createTodo(projectId, fd)
+      const res = edit ? await updateTodo(edit.id, fd) : await createTodo(scope || null, fd)
       if (res?.error) setError(res.error)
       else onClose()
     })
@@ -424,6 +443,20 @@ function TodoModal({
             autoFocus
           />
         </Field>
+        {/* Ao editar, envia o escopo escolhido para a server action mover a tarefa. */}
+        {edit && <input type="hidden" name="project_id" value={scope} />}
+        {showScopePicker && (
+          <Field label="Atribuir a" hint="Escolha um projeto ou deixe como tarefa pessoal.">
+            <Select value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="">Pessoal</option>
+              {projectOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Área" hint="Ex.: Pessoal, Casa, Mercado. Vazio = Outros.">
             <Input name="category" defaultValue={edit?.category ?? ""} placeholder="Outros" list="todo-areas" />
@@ -451,7 +484,7 @@ function TodoModal({
             </Select>
           </Field>
         </div>
-        {projectId && members.length > 0 && (
+        {showAssignee && (
           <Field label="Responsável">
             <Select name="assignee_id" defaultValue={edit?.assignee_id ?? ""}>
               <option value="">Sem responsável</option>
