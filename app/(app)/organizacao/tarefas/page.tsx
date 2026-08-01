@@ -9,6 +9,7 @@ import {
 } from "@/lib/data"
 import { OrganizacaoClient } from "@/components/organizacao-client"
 import { TodoBoard } from "@/components/todo-board"
+import { WorkspaceTabs, type WorkspaceTab } from "@/components/workspace-tabs"
 
 export const metadata = { title: "Tarefas | Dash" }
 
@@ -33,47 +34,60 @@ export default async function TarefasPage() {
   const notifEnabled = prefs.notif_settings?.task_reminders !== false
   const projectOptions = projects.map((p) => ({ id: p.id, name: p.name }))
 
-  return (
-    <div className="flex flex-col gap-8">
-      <OrganizacaoClient
-        projectId={null}
-        only="tarefas"
-        title="Tarefas"
-        description="Organize suas tarefas pessoais. Atribua uma tarefa a um projeto pelo botão de editar."
-        categories={categories}
-        shortcuts={[]}
-        notes={[]}
-        todos={todos}
-        reminders={reminders}
-        notifEnabled={notifEnabled}
-        projectOptions={projectOptions}
-      />
+  const openCount = (list: typeof todos) => list.filter((t) => !t.done && !t.archived).length
 
-      {projects.length > 0 && (
-        <section className="flex flex-col gap-6 border-t border-[color:var(--color-border)] pt-6">
-          <div className="flex flex-col gap-1">
-            <h2 className="font-display text-xl font-semibold text-foreground">Tarefas de projetos</h2>
-            <p className="text-sm text-muted">
-              Tarefas dos projetos em que você participa. Atribua a você ou aos sócios do projeto.
-            </p>
-          </div>
-          {projects.map((p) => (
-            <div key={p.id} className="flex flex-col gap-3">
-              <h3 className="flex items-center gap-2 font-display text-base font-semibold text-primary">
-                {p.name}
-              </h3>
-              <TodoBoard
-                projectId={p.id}
-                todos={projectTodos.filter((t) => t.project_id === p.id)}
-                members={membersByProject[p.id] ?? []}
-                reminders={reminders}
-                notifEnabled={notifEnabled}
-                projectOptions={projectOptions}
-              />
-            </div>
-          ))}
-        </section>
-      )}
+  const tabs: WorkspaceTab[] = [
+    {
+      key: "pessoal",
+      label: "Pessoal",
+      kind: "pessoal",
+      count: openCount(todos),
+      content: (
+        <OrganizacaoClient
+          projectId={null}
+          only="tarefas"
+          embedded
+          categories={categories}
+          shortcuts={[]}
+          notes={[]}
+          todos={todos}
+          reminders={reminders}
+          notifEnabled={notifEnabled}
+          projectOptions={projectOptions}
+        />
+      ),
+    },
+    ...projects.map((p) => {
+      const list = projectTodos.filter((t) => t.project_id === p.id)
+      return {
+        key: p.id,
+        label: p.name,
+        kind: "projeto" as const,
+        count: openCount(list),
+        content: (
+          <TodoBoard
+            projectId={p.id}
+            todos={list}
+            members={membersByProject[p.id] ?? []}
+            reminders={reminders}
+            notifEnabled={notifEnabled}
+            projectOptions={projectOptions}
+          />
+        ),
+      }
+    }),
+  ]
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-display text-2xl font-semibold text-foreground">Tarefas</h1>
+        <p className="text-sm text-muted">
+          Alterne entre suas tarefas pessoais e as de cada projeto. Atribua uma tarefa a um projeto pelo botão de
+          editar.
+        </p>
+      </div>
+      <WorkspaceTabs tabs={tabs} />
     </div>
   )
 }

@@ -121,13 +121,11 @@ export function OrganizacaoClient({
         </header>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className={cn("flex flex-wrap items-center gap-3", only ? "justify-start" : "justify-between")}>
         {only ? (
           embedded && title ? (
             <h3 className="font-display text-base font-semibold text-primary">{title}</h3>
-          ) : (
-            <span />
-          )
+          ) : null
         ) : (
           <div className="inline-flex rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-1">
             <TabBtn active={tab === "atalhos"} onClick={() => setTab("atalhos")}>

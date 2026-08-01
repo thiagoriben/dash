@@ -9,6 +9,7 @@ import {
   getShortcutCategoriesForProjects,
 } from "@/lib/data"
 import { OrganizacaoClient } from "@/components/organizacao-client"
+import { WorkspaceTabs, type WorkspaceTab } from "@/components/workspace-tabs"
 
 export const metadata = { title: "Notas | Dash" }
 
@@ -35,23 +36,17 @@ export default async function NotasPage() {
   }))
   const projectOptions = projects.map((p) => ({ id: p.id, name: p.name }))
 
-  // Só mostra seções de projetos que têm notas.
-  const sections = projects
-    .map((p) => ({
-      project: p,
-      notes: projectNotes.filter((n) => n.project_id === p.id),
-      categories: projectCats.filter((c) => c.project_id === p.id),
-    }))
-    .filter((s) => s.notes.length > 0)
-
-  return (
-    <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-1">
+  const tabs: WorkspaceTab[] = [
+    {
+      key: "pessoal",
+      label: "Pessoal",
+      kind: "pessoal",
+      count: notes.length,
+      content: (
         <OrganizacaoClient
           projectId={null}
           only="notas"
-          title="Notas"
-          description="Suas anotações pessoais e compartilhadas. Atribua uma nota a um projeto pelo botão de editar."
+          embedded
           categories={categories}
           shortcuts={[]}
           notes={notes}
@@ -59,32 +54,40 @@ export default async function NotasPage() {
           meId={profile.id}
           projectOptions={projectOptions}
         />
-      </section>
+      ),
+    },
+    ...projects.map((p) => {
+      const pNotes = projectNotes.filter((n) => n.project_id === p.id)
+      return {
+        key: p.id,
+        label: p.name,
+        kind: "projeto" as const,
+        count: pNotes.length,
+        content: (
+          <OrganizacaoClient
+            projectId={p.id}
+            only="notas"
+            embedded
+            categories={projectCats.filter((c) => c.project_id === p.id)}
+            shortcuts={[]}
+            notes={pNotes}
+            meId={profile.id}
+            projectOptions={projectOptions}
+          />
+        ),
+      }
+    }),
+  ]
 
-      {sections.length > 0 && (
-        <section className="flex flex-col gap-5 border-t border-[color:var(--color-border)] pt-6">
-          <div className="flex flex-col gap-1">
-            <h2 className="font-display text-xl font-semibold text-foreground">Notas de projetos</h2>
-            <p className="text-sm text-muted">
-              Notas dos projetos em que você participa. Qualquer membro pode ver e editar.
-            </p>
-          </div>
-          {sections.map((s) => (
-            <OrganizacaoClient
-              key={s.project.id}
-              projectId={s.project.id}
-              only="notas"
-              embedded
-              title={s.project.name}
-              categories={s.categories}
-              shortcuts={[]}
-              notes={s.notes}
-              meId={profile.id}
-              projectOptions={projectOptions}
-            />
-          ))}
-        </section>
-      )}
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-display text-2xl font-semibold text-foreground">Notas</h1>
+        <p className="text-sm text-muted">
+          Alterne entre suas notas pessoais e as de cada projeto. Atribua uma nota a um projeto pelo botão de editar.
+        </p>
+      </div>
+      <WorkspaceTabs tabs={tabs} />
     </div>
   )
 }
