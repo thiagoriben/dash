@@ -217,6 +217,8 @@ export async function updateNote(id: string, formData: FormData) {
     patch.project_id = newScope
     patch.category_id = null // categorias são por escopo; zera ao trocar
     patch.visibility = "privado" // some do compartilhamento pessoal ao virar de projeto
+    // Remove compartilhamentos pessoais antigos ao sair do escopo pessoal.
+    if (newScope) await syncNoteShares(supabase, me.id, id, [])
   }
 
   // Compartilhamento só se aplica a notas pessoais que continuam pessoais.
