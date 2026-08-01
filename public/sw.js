@@ -1,7 +1,7 @@
 // Service worker do Dash (PWA).
 // Mantém o app instalável e exibe as notificações agendadas de tarefas.
 
-const CACHE = "dash-v1"
+const CACHE = "dash-v2"
 
 self.addEventListener("install", (event) => {
   // Ativa imediatamente a nova versão.
@@ -46,6 +46,28 @@ self.addEventListener("fetch", (event) => {
         throw new Error("offline")
       }
     })(),
+  )
+})
+
+// Push do servidor (funciona com o app FECHADO). Payload JSON: { title, body, url, tag }.
+self.addEventListener("push", (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    data = { body: event.data ? event.data.text() : "" }
+  }
+  const title = data.title || "Lembrete de tarefa"
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "",
+      tag: data.tag || undefined,
+      renotify: Boolean(data.tag),
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      vibrate: [80, 40, 80],
+      data: { url: data.url || "/organizacao/tarefas" },
+    }),
   )
 })
 

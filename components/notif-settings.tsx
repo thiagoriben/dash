@@ -9,6 +9,7 @@ import {
   requestNotificationPermission,
   showNotification,
 } from "@/lib/pwa"
+import { subscribeToPush, unsubscribeFromPush, pushSupported } from "@/lib/push"
 
 const LEAD_OPTIONS = [
   { value: 0, label: "Na hora" },
@@ -31,10 +32,15 @@ export function NotifSettings({
   const [lead, setLead] = useState(initial.default_lead ?? 10)
   const [pending, start] = useTransition()
   const [saved, setSaved] = useState(false)
+  const [pushMsg, setPushMsg] = useState<string | null>(null)
 
   useEffect(() => {
     if (notificationsSupported()) setPerm(Notification.permission)
-  }, [])
+    // Reassina no servidor ao abrir (mantém a assinatura viva neste device).
+    if (initial.task_reminders !== false && typeof Notification !== "undefined" && Notification.permission === "granted") {
+      void subscribeToPush()
+    }
+  }, [initial.task_reminders])
 
   function persist(patch: Record<string, unknown>) {
     setSaved(false)
@@ -48,7 +54,26 @@ export function NotifSettings({
   async function enable() {
     const p = await requestNotificationPermission()
     setPerm(p)
-    if (p === "granted") persist({ enabled: true })
+    if (p === "granted") {
+      persist({ enabled: true })
+      await registerPush()
+    }
+  }
+
+  // Assina o push no servidor e mostra o status.
+  async function registerPush() {
+    if (!pushSupported()) {
+      setPushMsg("Este dispositivo não suporta notificações com o app fechado.")
+      return
+    }
+    setPushMsg("Ativando notificações no servidor…")
+    const ok = await subscribeToPush()
+    setPushMsg(
+      ok
+        ? "Pronto! Você receberá os lembretes mesmo com o app fechado."
+        : "Não foi possível ativar as notificações do servidor.",
+    )
+    setTimeout(() => setPushMsg(null), 4000)
   }
 
   const supported = notificationsSupported()
@@ -94,19 +119,23 @@ export function NotifSettings({
         <span>
           <span className="block text-sm font-medium text-foreground">Lembretes de tarefas</span>
           <span className="block text-xs text-muted">
-            Avisa no horário da tarefa (a aba precisa estar aberta).
+            Avisa no horário da tarefa, mesmo com o app fechado.
           </span>
         </span>
         <input
           type="checkbox"
           checked={taskOn}
           onChange={(e) => {
-            setTaskOn(e.target.checked)
-            persist({ task_reminders: e.target.checked })
+            const on = e.target.checked
+            setTaskOn(on)
+            persist({ task_reminders: on })
+            if (on) void registerPush()
+            else void unsubscribeFromPush()
           }}
           className="h-5 w-5 shrink-0 accent-[color:var(--color-primary)]"
         />
       </label>
+      {pushMsg && <p className="text-xs text-muted">{pushMsg}</p>}
 
       {/* Antecedência padrão */}
       <label className="flex items-center justify-between gap-3">
