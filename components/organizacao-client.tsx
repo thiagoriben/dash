@@ -109,7 +109,7 @@ export function OrganizacaoClient({
   }, [shortcuts])
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-5">
+    <div className={cn("flex flex-col gap-5", !embedded && "mx-auto max-w-6xl")}>
       {!embedded && (
         <header className="flex flex-col gap-1">
           <h1 className="font-display text-2xl font-semibold text-foreground">
@@ -123,7 +123,11 @@ export function OrganizacaoClient({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         {only ? (
-          <span />
+          embedded && title ? (
+            <h3 className="font-display text-base font-semibold text-primary">{title}</h3>
+          ) : (
+            <span />
+          )
         ) : (
           <div className="inline-flex rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-1">
             <TabBtn active={tab === "atalhos"} onClick={() => setTab("atalhos")}>

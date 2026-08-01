@@ -70,21 +70,18 @@ export default async function NotasPage() {
             </p>
           </div>
           {sections.map((s) => (
-            <div key={s.project.id} className="flex flex-col gap-3">
-              <h3 className="flex items-center gap-2 font-display text-base font-semibold text-primary">
-                {s.project.name}
-              </h3>
-              <OrganizacaoClient
-                projectId={s.project.id}
-                only="notas"
-                embedded
-                categories={s.categories}
-                shortcuts={[]}
-                notes={s.notes}
-                meId={profile.id}
-                projectOptions={projectOptions}
-              />
-            </div>
+            <OrganizacaoClient
+              key={s.project.id}
+              projectId={s.project.id}
+              only="notas"
+              embedded
+              title={s.project.name}
+              categories={s.categories}
+              shortcuts={[]}
+              notes={s.notes}
+              meId={profile.id}
+              projectOptions={projectOptions}
+            />
           ))}
         </section>
       )}
