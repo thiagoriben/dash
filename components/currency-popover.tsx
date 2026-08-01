@@ -18,6 +18,7 @@ export function CurrencyPopover({
   overrides = {},
   collapsed,
   placement = "up",
+  inline = false,
 }: {
   usdBrl: number
   currencies?: string[]
@@ -26,10 +27,12 @@ export function CurrencyPopover({
   collapsed: boolean
   /** Direção de abertura do popover. "up" na sidebar, "down" quando embutido em página. */
   placement?: "up" | "down"
+  /** Renderiza o painel sempre aberto e no fluxo (sem popover flutuante). Usado no perfil. */
+  inline?: boolean
 }) {
   const router = useRouter()
   const ref = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(inline)
   const [rates, setRates] = useState<LiveRates | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, startSaving] = useTransition()
@@ -54,9 +57,9 @@ export function CurrencyPopover({
     function onDoc(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
-    if (open) document.addEventListener("mousedown", onDoc)
+    if (open && !inline) document.addEventListener("mousedown", onDoc)
     return () => document.removeEventListener("mousedown", onDoc)
-  }, [open])
+  }, [open, inline])
 
   async function loadRates(codes: string[]) {
     setLoading(true)
@@ -121,32 +124,39 @@ export function CurrencyPopover({
     startSaving(async () => {
       await setTrackedCurrencies(tracked)
       await setCurrencyOverrides(ov)
-      setOpen(false)
+      if (!inline) setOpen(false)
       setEditing(null)
       router.refresh()
     })
   }
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Câmbio de moedas"
-        title="Câmbio"
-        className={cn(
-          "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-foreground",
-          collapsed && "justify-center px-0",
-        )}
-      >
-        <Coins size={18} />
-        {!collapsed && "Câmbio"}
-      </button>
+    <div ref={ref} className={cn(!inline && "relative")}>
+      {!inline && (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Câmbio de moedas"
+          title="Câmbio"
+          className={cn(
+            "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-foreground",
+            collapsed && "justify-center px-0",
+          )}
+        >
+          <Coins size={18} />
+          {!collapsed && "Câmbio"}
+        </button>
+      )}
 
       {open && (
         <div
           className={cn(
-            "absolute left-0 z-50 w-80 rounded-2xl border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-2)] p-3 shadow-2xl",
-            placement === "up" ? "bottom-full mb-2" : "top-full mt-2",
+            "rounded-2xl border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-2)] p-3",
+            inline
+              ? "w-full"
+              : cn(
+                  "absolute left-0 z-50 w-80 shadow-2xl",
+                  placement === "up" ? "bottom-full mb-2" : "top-full mt-2",
+                ),
           )}
         >
           <div className="mb-2 flex items-center justify-between">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { Prefs, Project } from "@/lib/types"
@@ -9,10 +9,12 @@ import {
   duplicateProject,
   assignProjectFolder,
   saveProjectFolders,
+  saveProjectOrder,
 } from "@/app/actions/projects"
 import { Button, Badge, Field, Input, Select, Card } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { SelectOrOther } from "@/components/select-or-other"
+import { EditProjectModal } from "@/components/project/edit-project-modal"
 import {
   Plus,
   FolderKanban,
@@ -24,6 +26,9 @@ import {
   Copy,
   FolderPlus,
   Folder,
+  Pencil,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import { DEFAULT_CURRENCIES, DEFAULT_OFFER_TYPES, DEFAULT_REGIONS } from "@/lib/currency"
 import { cn } from "@/lib/utils"
@@ -59,14 +64,25 @@ export function ProjectsClient({
   const [visFilter, setVisFilter] = useState<VisFilter>("todos")
   const [query, setQuery] = useState("")
   const [duplicating, setDuplicating] = useState<Project | null>(null)
+  const [editing, setEditing] = useState<Project | null>(null)
   const [newFolderOpen, setNewFolderOpen] = useState(false)
+  const [reorderMode, setReorderMode] = useState(false)
   const router = useRouter()
 
   const folders = useMemo(() => (prefs?.project_folders ?? []).filter(Boolean), [prefs])
   const folderMap = useMemo(() => prefs?.project_folder_map ?? {}, [prefs])
   const folderOf = (p: Project) => folderMap[p.id] || GERAL
 
-  const filtered = projects.filter((p) => {
+  // Aplica a ordem manual salva nas prefs; projetos novos (sem ordem) vão pro fim.
+  const ordered = useMemo(() => {
+    const order = prefs?.project_order ?? []
+    const rank = new Map(order.map((id, i) => [id, i]))
+    return [...projects].sort(
+      (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    )
+  }, [projects, prefs?.project_order])
+
+  const filtered = ordered.filter((p) => {
     if (visFilter !== "todos" && p.visibility !== visFilter) return false
     if (query.trim() && !p.name.toLowerCase().includes(query.trim().toLowerCase())) return false
     return true
@@ -129,6 +145,24 @@ export function ProjectsClient({
     })
   }
 
+  /** Move um projeto para cima/baixo dentro da sua pasta e persiste a ordem global. */
+  function moveProject(sectionItems: Project[], index: number, dir: -1 | 1) {
+    const target = index + dir
+    if (target < 0 || target >= sectionItems.length) return
+    const a = sectionItems[index]
+    const b = sectionItems[target]
+    // Reordena na lista global preservando a ordem das demais.
+    const ids = ordered.map((p) => p.id)
+    const ia = ids.indexOf(a.id)
+    const ib = ids.indexOf(b.id)
+    ids[ia] = b.id
+    ids[ib] = a.id
+    startTransition(async () => {
+      await saveProjectOrder(ids)
+      router.refresh()
+    })
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -137,13 +171,23 @@ export function ProjectsClient({
           <p className="text-sm text-muted">Gerencie suas operações e ofertas.</p>
         </div>
         <div className="flex items-center gap-2">
+          {projects.length > 1 && (
+            <Button
+              variant={reorderMode ? "primary" : "outline"}
+              onClick={() => setReorderMode((v) => !v)}
+              title="Reordenar projetos"
+            >
+              <ArrowUpDownIcon />
+              <span className="hidden sm:inline">{reorderMode ? "Concluir" : "Reordenar"}</span>
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setNewFolderOpen(true)}>
             <FolderPlus size={16} />
-            Nova pasta
+            <span className="hidden sm:inline">Nova pasta</span>
           </Button>
           <Button onClick={() => setOpen(true)}>
             <Plus size={16} />
-            Novo projeto
+            <span className="hidden sm:inline">Novo projeto</span>
           </Button>
         </div>
       </div>
@@ -223,14 +267,20 @@ export function ProjectsClient({
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {items.map((p) => (
+                    {items.map((p, i) => (
                       <ProjectCard
                         key={p.id}
                         project={p}
                         folders={folders}
                         currentFolder={folderOf(p)}
                         onDuplicate={() => setDuplicating(p)}
+                        onEdit={() => setEditing(p)}
                         onMove={(folder) => moveToFolder(p.id, folder)}
+                        reorderMode={reorderMode}
+                        canUp={i > 0}
+                        canDown={i < items.length - 1}
+                        onUp={() => moveProject(items, i, -1)}
+                        onDown={() => moveProject(items, i, 1)}
                         disabled={pending}
                       />
                     ))}
@@ -396,6 +446,16 @@ export function ProjectsClient({
         ) : null}
       </Modal>
 
+      {/* Editar projeto */}
+      {editing ? (
+        <EditProjectModal
+          project={editing}
+          prefs={prefs ?? null}
+          canDelete
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+
       {/* Nova pasta */}
       <Modal open={newFolderOpen} onClose={() => setNewFolderOpen(false)} title="Nova pasta">
         <form
@@ -419,22 +479,55 @@ export function ProjectsClient({
   )
 }
 
+function ArrowUpDownIcon() {
+  // Ícone composto simples de reordenar (setas cima/baixo).
+  return (
+    <span className="flex items-center">
+      <ArrowUp size={13} className="-mr-1" />
+      <ArrowDown size={13} />
+    </span>
+  )
+}
+
 function ProjectCard({
   project: p,
   folders,
   currentFolder,
   onDuplicate,
+  onEdit,
   onMove,
+  reorderMode,
+  canUp,
+  canDown,
+  onUp,
+  onDown,
   disabled,
 }: {
   project: Project
   folders: string[]
   currentFolder: string
   onDuplicate: () => void
+  onEdit: () => void
   onMove: (folder: string) => void
+  reorderMode?: boolean
+  canUp?: boolean
+  canDown?: boolean
+  onUp?: () => void
+  onDown?: () => void
   disabled?: boolean
 }) {
   const Vis = visIcon[p.visibility]
+  const [folderOpen, setFolderOpen] = useState(false)
+  const folderRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (folderRef.current && !folderRef.current.contains(e.target as Node)) setFolderOpen(false)
+    }
+    if (folderOpen) document.addEventListener("mousedown", onDoc)
+    return () => document.removeEventListener("mousedown", onDoc)
+  }, [folderOpen])
+
   return (
     <Card
       className="group flex h-full flex-col overflow-hidden p-5"
@@ -469,36 +562,92 @@ function ProjectCard({
         </div>
       </Link>
 
-      <div className="mt-4 flex items-center justify-between gap-2 border-t border-[color:var(--color-border)] pt-3">
-        <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
-          <Folder size={13} className="shrink-0" />
-          <Select
-            aria-label="Mover para pasta"
-            value={currentFolder}
-            disabled={disabled}
-            onChange={(e) => onMove(e.target.value)}
-            className="h-8 w-auto max-w-[9rem] text-xs"
-          >
-            <option value={GERAL}>{GERAL}</option>
-            {folders.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <button
-          type="button"
-          onClick={onDuplicate}
-          disabled={disabled}
-          aria-label="Duplicar projeto"
-          title="Duplicar projeto"
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-white/5 hover:text-foreground disabled:opacity-40"
-        >
-          <Copy size={14} />
-          Duplicar
-        </button>
+      <div className="mt-4 flex items-center justify-between gap-1 border-t border-[color:var(--color-border)] pt-3">
+        {reorderMode ? (
+          <div className="flex items-center gap-1">
+            <IconBtn label="Mover para cima" onClick={onUp} disabled={disabled || !canUp}>
+              <ArrowUp size={16} />
+            </IconBtn>
+            <IconBtn label="Mover para baixo" onClick={onDown} disabled={disabled || !canDown}>
+              <ArrowDown size={16} />
+            </IconBtn>
+          </div>
+        ) : (
+          <div className="relative" ref={folderRef}>
+            <IconBtn
+              label="Pasta"
+              onClick={() => setFolderOpen((v) => !v)}
+              disabled={disabled}
+              active={currentFolder !== GERAL}
+            >
+              <Folder size={16} />
+            </IconBtn>
+            {folderOpen && (
+              <div className="absolute bottom-full left-0 z-30 mb-2 w-48 rounded-xl border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-2)] p-1.5 shadow-2xl">
+                <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Mover para pasta
+                </p>
+                {[GERAL, ...folders].map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => {
+                      onMove(f)
+                      setFolderOpen(false)
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-white/5",
+                      currentFolder === f ? "text-primary" : "text-foreground",
+                    )}
+                  >
+                    <Folder size={13} className="shrink-0 text-muted" />
+                    <span className="truncate">{f}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center gap-1">
+          <IconBtn label="Editar projeto" onClick={onEdit} disabled={disabled}>
+            <Pencil size={16} />
+          </IconBtn>
+          <IconBtn label="Duplicar projeto" onClick={onDuplicate} disabled={disabled}>
+            <Copy size={16} />
+          </IconBtn>
+        </div>
       </div>
     </Card>
+  )
+}
+
+function IconBtn({
+  label,
+  onClick,
+  disabled,
+  active,
+  children,
+}: {
+  label: string
+  onClick?: () => void
+  disabled?: boolean
+  active?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={cn(
+        "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/5 hover:text-foreground disabled:opacity-30",
+        active ? "text-primary" : "text-muted",
+      )}
+    >
+      {children}
+    </button>
   )
 }

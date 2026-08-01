@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { AdAccount, AdAccountStatus, CardCharge, DailyMetric, Project } from "@/lib/types"
 import { formatCurrency, formatPercent } from "@/lib/utils"
@@ -61,6 +61,16 @@ export function TabAdAccounts({
   const adSpend = metrics.reduce((s, m) => s + m.spend, 0)
   const cardCharged = cardCharges.reduce((s, c) => s + c.amount, 0)
   const tax = computeTrafficTax(adSpend, cardCharged)
+
+  // Lista de BMs já cadastradas (nomes únicos, sem vazio) para o seletor de "conta nova".
+  const existingBms = useMemo(() => {
+    const set = new Set<string>()
+    for (const a of adAccounts) {
+      const n = a.bm_name?.trim()
+      if (n) set.add(n)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [adAccounts])
 
   // Agrupa as contas por BM (a BM "segura" as contas). Contas sem BM caem em "Sem BM".
   const NO_BM = "Sem BM"
@@ -279,9 +289,7 @@ export function TabAdAccounts({
       >
         <form action={submitAcc} className="flex flex-col gap-4">
           {editingAcc ? <input type="hidden" name="id" value={editingAcc.id} /> : null}
-          <Field label="Nome da BM" hint="A BM segura as contas. Contas com a mesma BM ficam agrupadas.">
-            <Input name="bm_name" defaultValue={editingAcc?.bm_name ?? ""} placeholder="Ex: BM Principal" />
-          </Field>
+          <BmSelector existingBms={existingBms} defaultBm={editingAcc?.bm_name ?? ""} />
           <Field label="Nome da conta de anúncio">
             <Input name="account_name" defaultValue={editingAcc?.account_name} placeholder="Ex: CA 01" required />
           </Field>
@@ -398,5 +406,55 @@ export function TabAdAccounts({
         </form>
       </Modal>
     </div>
+  )
+}
+
+/**
+ * Campo da BM: escolhe uma BM já existente ou cria uma nova.
+ * Envia sempre `bm_name` (o valor final) no form.
+ */
+function BmSelector({
+  existingBms,
+  defaultBm,
+}: {
+  existingBms: string[]
+  defaultBm: string
+}) {
+  const NEW = "__new__"
+  const hasExisting = existingBms.length > 0
+  // Se a BM atual não está na lista (ou não há nenhuma), começa em modo "criar".
+  const startNew = !hasExisting || (!!defaultBm && !existingBms.includes(defaultBm))
+  const [mode, setMode] = useState<string>(startNew ? NEW : defaultBm || (existingBms[0] ?? NEW))
+  const [newName, setNewName] = useState(startNew ? defaultBm : "")
+
+  const creating = mode === NEW
+  const bmValue = creating ? newName : mode
+
+  return (
+    <Field
+      label="BM"
+      hint="A BM agrupa as contas. Escolha uma já criada ou crie uma nova."
+    >
+      <input type="hidden" name="bm_name" value={bmValue} />
+      {hasExisting && (
+        <Select value={mode} onChange={(e) => setMode(e.target.value)}>
+          {existingBms.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+          <option value={NEW}>+ Nova BM…</option>
+        </Select>
+      )}
+      {creating && (
+        <Input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="Ex: BM Principal"
+          className={hasExisting ? "mt-2" : undefined}
+          autoFocus={hasExisting}
+        />
+      )}
+    </Field>
   )
 }

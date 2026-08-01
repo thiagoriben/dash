@@ -119,7 +119,7 @@ export default async function PerfilPage() {
             currencies={fxCurrencies}
             overrides={fxOverrides}
             collapsed={false}
-            placement="down"
+            inline
           />
         </CardContent>
       </Card>

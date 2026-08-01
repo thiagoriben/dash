@@ -48,7 +48,9 @@ export function AppShell({
             {topbar}
             {mobileNav}
             {banner}
-            <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">{children}</main>
+            <main className="mx-auto max-w-7xl px-4 py-6 pb-24 md:px-6 md:py-8 md:pb-8">
+              {children}
+            </main>
           </div>
         </div>
       </PrivacyProvider>

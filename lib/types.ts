@@ -74,6 +74,16 @@ export type Prefs = {
   project_folder_map?: Record<string, string>
   /** Mapa conta de anúncio -> status (ativa/pausada/restrita). */
   ad_account_status?: Record<string, string>
+  /** Ordem manual dos projetos (lista de ids). Ids ausentes vão pro fim. */
+  project_order?: string[]
+  /** Horário/lembrete por tarefa: id -> { time: "HH:MM", lead: minutos antes }. */
+  task_reminders?: Record<string, { time?: string; lead?: number }>
+  /** Configuração de notificações do usuário. */
+  notif_settings?: {
+    enabled?: boolean
+    task_reminders?: boolean
+    default_lead?: number
+  }
 }
 
 /** Preset de métricas reutilizável nas dashboards. */

@@ -3,7 +3,8 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useTransition } from "react"
 import { Select } from "@/components/ui"
-import { CalendarRange, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { CalendarRange, Loader2, Zap } from "lucide-react"
 import type { Period, Notification } from "@/lib/data"
 import { PrivacyToggle } from "@/components/privacy"
 import { NotificationBell } from "@/components/notification-bell"
@@ -47,16 +48,23 @@ export function Topbar({
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-background)]/70 px-4 backdrop-blur-xl md:px-6">
       <div className="flex items-center gap-2 text-muted">
+        {/* Marca no mobile (a sidebar fica oculta) */}
+        <Link href="/" className="flex items-center gap-2 md:hidden" aria-label="Dash — início">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Zap size={18} />
+          </span>
+          <span className="font-display text-lg font-semibold neon-text">Dash</span>
+        </Link>
         {hidePeriod ? (
-          <span className="h-9" aria-hidden="true" />
+          <span className="hidden h-9 md:block" aria-hidden="true" />
         ) : (
           <>
-            <CalendarRange size={18} className="text-primary" />
+            <CalendarRange size={18} className="hidden text-primary sm:block" />
             <Select
               aria-label="Período global"
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              className="h-9 w-auto min-w-40"
+              className="h-9 w-auto min-w-0 sm:min-w-40"
             >
               {periods.map((p) => (
                 <option key={p.value} value={p.value}>

@@ -370,6 +370,13 @@ export async function assignProjectFolder(projectId: string, folder: string) {
   return { ok: true }
 }
 
+/** Salva a ordem manual dos projetos (lista de ids) nas prefs. */
+export async function saveProjectOrder(orderedIds: string[]) {
+  await patchPrefsRaw({ project_order: orderedIds })
+  revalidatePath("/projetos")
+  return { ok: true }
+}
+
 /* ---------- Colaboradores ---------- */
 export async function addProjectMember(projectId: string, formData: FormData) {
   const supabase = await createClient()
