@@ -35,7 +35,7 @@ const STATUS: { value: AdAccountStatus; label: string; tone: "positive" | "warni
   { value: "pausada", label: "Pausada", tone: "warning" },
   { value: "restrita", label: "Restrita", tone: "negative" },
 ]
-const statusMeta = (s: string) => STATUS.find((x) => x.value === s) ?? STATUS[0]
+const statusMeta = (s: string | undefined) => STATUS.find((x) => x.value === s) ?? STATUS[0]
 
 export function TabAdAccounts({
   project,

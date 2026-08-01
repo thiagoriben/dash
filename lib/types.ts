@@ -72,6 +72,8 @@ export type Prefs = {
   project_folders?: string[]
   /** Mapa projeto -> nome da pasta. Projetos ausentes ficam em "Geral". */
   project_folder_map?: Record<string, string>
+  /** Mapa conta de anúncio -> status (ativa/pausada/restrita). */
+  ad_account_status?: Record<string, string>
 }
 
 /** Preset de métricas reutilizável nas dashboards. */
@@ -253,7 +255,8 @@ export type AdAccount = {
   project_id: string
   bm_name: string | null
   account_name: string
-  status: AdAccountStatus
+  /** Situação vinda das prefs do usuário (não é coluna do banco). Default: "ativa". */
+  status?: AdAccountStatus
   created_at: string
 }
 

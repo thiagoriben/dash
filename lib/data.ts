@@ -296,7 +296,26 @@ export async function getAdAccounts(projectId: string): Promise<AdAccount[]> {
     .select("*")
     .eq("project_id", projectId)
     .order("created_at")
-  return (data ?? []) as AdAccount[]
+  const accounts = (data ?? []) as AdAccount[]
+
+  // O status vive nas prefs do usuário (não há coluna no banco). Mescla aqui.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  let statusMap: Record<string, string> = {}
+  if (user) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("prefs")
+      .eq("id", user.id)
+      .maybeSingle()
+    const prefs = (prof?.prefs ?? {}) as Record<string, unknown>
+    statusMap = (prefs.ad_account_status as Record<string, string>) ?? {}
+  }
+  return accounts.map((a) => ({
+    ...a,
+    status: (statusMap[a.id] as AdAccount["status"]) ?? "ativa",
+  }))
 }
 
 /* ---------- Cobranças no cartão (anúncios com imposto) ---------- */

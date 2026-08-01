@@ -326,6 +326,23 @@ export async function saveProjectFolders(folders: string[]) {
   return { ok: true }
 }
 
+/** Grava o status de uma conta de anúncio nas prefs (ativa/pausada/restrita). */
+async function setAdAccountStatusPref(accountId: string, status: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+  const { data } = await supabase.from("profiles").select("prefs").eq("id", user.id).maybeSingle()
+  const prefs = (data?.prefs ?? {}) as Record<string, unknown>
+  const map = { ...((prefs.ad_account_status as Record<string, string>) ?? {}) }
+  map[accountId] = status
+  await supabase
+    .from("profiles")
+    .update({ prefs: { ...prefs, ad_account_status: map } })
+    .eq("id", user.id)
+}
+
 /** Associa um projeto a uma pasta ("Geral"/vazio remove a associação). */
 export async function assignProjectFolder(projectId: string, folder: string) {
   const supabase = await createClient()
@@ -791,15 +808,25 @@ export async function saveAdAccount(projectId: string, formData: FormData) {
   const status = validStatus.includes(String(formData.get("status") ?? ""))
     ? String(formData.get("status"))
     : "ativa"
+  // O status é guardado nas prefs do usuário (não há coluna no banco), keyed por id da conta.
   const payload = {
     bm_name: String(formData.get("bm_name") ?? "").trim() || null,
     account_name: accountName,
-    status,
   }
-  const { error } = id
-    ? await supabase.from("ad_accounts").update(payload).eq("id", id)
-    : await supabase.from("ad_accounts").insert({ ...payload, project_id: projectId })
-  if (error) return { error: error.message }
+  let accountId = id
+  if (id) {
+    const { error } = await supabase.from("ad_accounts").update(payload).eq("id", id)
+    if (error) return { error: error.message }
+  } else {
+    const { data, error } = await supabase
+      .from("ad_accounts")
+      .insert({ ...payload, project_id: projectId })
+      .select("id")
+      .maybeSingle()
+    if (error) return { error: error.message }
+    accountId = data?.id ?? ""
+  }
+  if (accountId) await setAdAccountStatusPref(accountId, status)
   await logActivity({
     actor: profile,
     action: id ? "update" : "create",
