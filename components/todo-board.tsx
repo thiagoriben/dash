@@ -412,11 +412,19 @@ function TodoModal({
   const [pending, startTransition] = React.useTransition()
   const [error, setError] = React.useState<string | null>(null)
   const edit = state.edit
+  const formRef = React.useRef<HTMLFormElement>(null)
   // Escopo: "" = pessoal, senão id do projeto. Começa no escopo atual do quadro.
   const [scope, setScope] = React.useState<string>(projectId ?? "")
+  // Área controlada para preservar ao usar "salvar e nova".
+  const [area, setArea] = React.useState<string>("")
+  const [savedHint, setSavedHint] = React.useState(false)
   React.useEffect(() => {
-    if (state.open) setScope(projectId ?? "")
-  }, [state.open, projectId])
+    if (state.open) {
+      setScope(projectId ?? "")
+      setArea(edit?.category ?? "")
+      setSavedHint(false)
+    }
+  }, [state.open, projectId, edit])
 
   // Só tarefa pessoal pode ser atribuída a um projeto. Tarefa de projeto fica travada nele.
   const showScopePicker = projectOptions.length > 0 && projectId === null
@@ -432,9 +440,25 @@ function TodoModal({
       else onClose()
     })
   }
+  // Cria e mantém o modal aberto, preservando escopo/área e limpando o resto.
+  const submitAndNew = () => {
+    setError(null)
+    const fd = new FormData(formRef.current!)
+    startTransition(async () => {
+      const res = await createTodo(scope || null, fd)
+      if (res?.error) {
+        setError(res.error)
+        return
+      }
+      formRef.current?.reset()
+      setSavedHint(true)
+      const titleEl = formRef.current?.elements.namedItem("title") as HTMLInputElement | null
+      titleEl?.focus()
+    })
+  }
   return (
     <Modal open={state.open} onClose={onClose} title={edit ? "Editar tarefa" : "Nova tarefa"}>
-      <form action={run} className="flex flex-col gap-4">
+      <form ref={formRef} action={run} className="flex flex-col gap-4">
         <Field label="Tarefa">
           <Input
             name="title"
@@ -460,7 +484,13 @@ function TodoModal({
         )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Área" hint="Ex.: Pessoal, Casa, Mercado. Vazio = Outros.">
-            <Input name="category" defaultValue={edit?.category ?? ""} placeholder="Outros" list="todo-areas" />
+            <Input
+              name="category"
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+              placeholder="Outros"
+              list="todo-areas"
+            />
             <datalist id="todo-areas">
               {areas.map((a) => (
                 <option key={a} value={a} />
@@ -498,10 +528,16 @@ function TodoModal({
           </Field>
         )}
         {error && <p className="text-sm text-negative">{error}</p>}
-        <div className="flex justify-end gap-2">
+        {savedHint && !error && <p className="text-sm text-primary">Tarefa criada. Adicione outra ou feche.</p>}
+        <div className="flex flex-wrap justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            Cancelar
+            {edit ? "Cancelar" : "Fechar"}
           </Button>
+          {!edit && (
+            <Button type="button" variant="outline" disabled={pending} onClick={submitAndNew}>
+              {pending ? "Salvando..." : "Salvar e nova"}
+            </Button>
+          )}
           <Button type="submit" disabled={pending}>
             {pending ? "Salvando..." : "Salvar"}
           </Button>

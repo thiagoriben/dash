@@ -449,12 +449,13 @@ function NoteCard({
 function useFormAction(onDone: () => void) {
   const [pending, startTransition] = React.useTransition()
   const [error, setError] = React.useState<string | null>(null)
-  const run = (fn: () => Promise<{ ok?: boolean; error?: string }>) => {
+  // onSuccess opcional: quando informado, roda em vez de onDone (ex.: "salvar e nova").
+  const run = (fn: () => Promise<{ ok?: boolean; error?: string }>, onSuccess?: () => void) => {
     setError(null)
     startTransition(async () => {
       const res = await fn()
       if (res?.error) setError(res.error)
-      else onDone()
+      else (onSuccess ?? onDone)()
     })
   }
   return { pending, error, run }
@@ -603,16 +604,38 @@ function NoteModal({
 }) {
   const { pending, error, run } = useFormAction(onClose)
   const edit = state.edit
+  const formRef = React.useRef<HTMLFormElement>(null)
   const [selected, setSelected] = React.useState<string[]>([])
   // Escopo escolhido: "" = pessoal, senão id do projeto. Começa no escopo atual.
   const [scope, setScope] = React.useState<string>(projectId ?? "")
+  // Categoria controlada para preservar ao usar "salvar e nova".
+  const [categoryId, setCategoryId] = React.useState<string>("")
+  const [savedHint, setSavedHint] = React.useState(false)
 
   React.useEffect(() => {
     if (state.open) {
       setSelected(edit?.shared_with ?? [])
       setScope(projectId ?? "")
+      setCategoryId(edit?.category_id ?? "")
+      setSavedHint(false)
     }
   }, [state.open, edit, projectId])
+
+  // Salva e mantém o modal aberto no mesmo escopo/categoria, limpando só o conteúdo.
+  const submitAndNew = () => {
+    const fd = new FormData(formRef.current!)
+    run(
+      () => createNote(scope || null, fd),
+      () => {
+        formRef.current?.reset()
+        setSelected([])
+        setSavedHint(true)
+        // Reaplica escopo/categoria (o reset limpa os campos não controlados).
+        const titleEl = formRef.current?.elements.namedItem("title") as HTMLInputElement | null
+        titleEl?.focus()
+      },
+    )
+  }
 
   // Só nota pessoal pode ser atribuída a um projeto. Nota já de projeto fica travada nele.
   const showScopePicker = projectOptions.length > 0 && projectId === null
@@ -628,6 +651,7 @@ function NoteModal({
   return (
     <Modal open={state.open} onClose={onClose} title={edit ? "Editar nota" : "Nova nota"}>
       <form
+        ref={formRef}
         action={(fd) => run(() => (edit ? updateNote(edit.id, fd) : createNote(scope || null, fd)))}
         className="flex flex-col gap-4"
       >
@@ -650,7 +674,7 @@ function NoteModal({
         )}
         {showCategory && (
           <Field label="Categoria">
-            <Select name="category_id" defaultValue={edit?.category_id ?? ""}>
+            <Select name="category_id" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
               <option value="">Sem categoria</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -706,10 +730,16 @@ function NoteModal({
         )}
 
         {error && <p className="text-sm text-negative">{error}</p>}
-        <div className="flex justify-end gap-2">
+        {savedHint && !error && <p className="text-sm text-primary">Nota criada. Adicione outra ou feche.</p>}
+        <div className="flex flex-wrap justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            Cancelar
+            {edit ? "Cancelar" : "Fechar"}
           </Button>
+          {!edit && (
+            <Button type="button" variant="outline" disabled={pending} onClick={submitAndNew}>
+              {pending ? "Salvando..." : "Salvar e nova"}
+            </Button>
+          )}
           <Button type="submit" disabled={pending}>
             {pending ? "Salvando..." : "Salvar"}
           </Button>
