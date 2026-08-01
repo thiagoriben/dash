@@ -49,3 +49,21 @@ export function convertCurrency(
 ): number {
   return fromBRL(toBRL(amount, from as Currency, usdBrl), to, usdBrl)
 }
+
+/**
+ * Converte um valor digitado (string ou número, aceita vírgula) de uma moeda de
+ * input para a moeda do projeto — usada para armazenar sempre na moeda do projeto.
+ * Retorna 2 casas decimais.
+ */
+export function inputToProject(
+  raw: string | number,
+  from: Currency | string,
+  projectCurrency: Currency | string,
+  usdBrl: number,
+): number {
+  const n =
+    typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? "").replace(",", ".")) || 0
+  if (!n) return 0
+  if (normalizeCurrency(from) === normalizeCurrency(projectCurrency)) return +n.toFixed(2)
+  return +convertCurrency(n, from, projectCurrency, usdBrl).toFixed(2)
+}

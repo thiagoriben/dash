@@ -217,6 +217,142 @@ export async function deleteProject(id: string) {
   return { ok: true }
 }
 
+/**
+ * Duplica um projeto, aplicando as alterações informadas no formulário
+ * (nome, região, moeda, oferta, status, visibilidade, pasta). Copia APENAS
+ * os produtos do projeto de origem — não copia vendas, gastos, criativos, etc.
+ */
+export async function duplicateProject(sourceId: string, formData: FormData) {
+  const supabase = await createClient()
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: "Não autenticado." }
+
+  const { data: src } = await supabase.from("projects").select("*").eq("id", sourceId).maybeSingle()
+  if (!src) return { error: "Projeto não encontrado." }
+
+  const name = String(formData.get("name") ?? "").trim() || `${src.name} (cópia)`
+  const region = String(formData.get("region") ?? src.region ?? "br").toLowerCase()
+  const offer_type =
+    String(formData.get("offer_type") ?? "").toLowerCase() || src.offer_type || null
+  const currency = normalizeCurrency(String(formData.get("currency") ?? src.currency ?? "brl"))
+  const status = String(formData.get("status") ?? src.status ?? "ativo")
+  const visibility = String(formData.get("visibility") ?? src.visibility ?? "privado")
+
+  const { data: created, error } = await supabase
+    .from("projects")
+    .insert({
+      name,
+      offer_type,
+      region,
+      currency,
+      status,
+      visibility,
+      tax_pct: src.tax_pct ?? 0,
+      card_color: src.card_color ?? null,
+      owner_id: profile.id,
+    })
+    .select("id")
+    .maybeSingle()
+  if (error) return { error: error.message }
+
+  if (created?.id) {
+    // Copia apenas os produtos criados.
+    const { data: products } = await supabase.from("products").select("*").eq("project_id", sourceId)
+    if (products && products.length > 0) {
+      await supabase.from("products").insert(
+        products.map((p: Record<string, unknown>) => ({
+          project_id: created.id,
+          name: p.name,
+          kind: p.kind,
+          price: p.price,
+          product_cost: p.product_cost,
+          gateway_id: p.gateway_id,
+          in_funnel: p.in_funnel,
+          position: p.position,
+        })),
+      )
+    }
+    // Pasta opcional escolhida na duplicação.
+    const folder = String(formData.get("folder") ?? "").trim()
+    if (folder && folder.toLowerCase() !== "geral") {
+      await assignProjectFolder(created.id, folder)
+    }
+  }
+
+  await logActivity({
+    actor: profile,
+    action: "create",
+    entity: "project",
+    entityId: created?.id ?? null,
+    projectId: created?.id ?? null,
+    summary: `Duplicou o projeto "${src.name}" como "${name}"`,
+  })
+  revalidatePath("/projetos")
+  revalidatePath("/")
+  return { ok: true }
+}
+
+/* ---------- Pastas de projeto (organização por usuário, salvas em prefs) ---------- */
+
+/** Lê as prefs atuais e mescla um patch, gravando de volta (suporta objetos/arrays). */
+async function patchPrefsRaw(patch: Record<string, unknown>) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+  const { data } = await supabase.from("profiles").select("prefs").eq("id", user.id).maybeSingle()
+  const current = (data?.prefs ?? {}) as Record<string, unknown>
+  await supabase
+    .from("profiles")
+    .update({ prefs: { ...current, ...patch } })
+    .eq("id", user.id)
+}
+
+/** Cria/renomeia/reordena a lista de pastas do usuário. */
+export async function saveProjectFolders(folders: string[]) {
+  const seen = new Set<string>()
+  const clean: string[] = []
+  for (const f of folders) {
+    const v = f.trim()
+    if (!v || v.toLowerCase() === "geral") continue
+    const key = v.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    clean.push(v)
+  }
+  await patchPrefsRaw({ project_folders: clean })
+  revalidatePath("/projetos")
+  return { ok: true }
+}
+
+/** Associa um projeto a uma pasta ("Geral"/vazio remove a associação). */
+export async function assignProjectFolder(projectId: string, folder: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: "Não autenticado." }
+  const { data } = await supabase.from("profiles").select("prefs").eq("id", user.id).maybeSingle()
+  const prefs = (data?.prefs ?? {}) as Record<string, unknown>
+  const map = { ...((prefs.project_folder_map as Record<string, string>) ?? {}) }
+  const name = folder.trim()
+  if (!name || name.toLowerCase() === "geral") {
+    delete map[projectId]
+  } else {
+    map[projectId] = name
+  }
+  const folders = Array.from(
+    new Set([...(((prefs.project_folders as string[]) ?? []).filter(Boolean)), ...(name && name.toLowerCase() !== "geral" ? [name] : [])]),
+  )
+  await supabase
+    .from("profiles")
+    .update({ prefs: { ...prefs, project_folder_map: map, project_folders: folders } })
+    .eq("id", user.id)
+  revalidatePath("/projetos")
+  return { ok: true }
+}
+
 /* ---------- Colaboradores ---------- */
 export async function addProjectMember(projectId: string, formData: FormData) {
   const supabase = await createClient()
@@ -651,9 +787,14 @@ export async function saveAdAccount(projectId: string, formData: FormData) {
   const id = String(formData.get("id") ?? "")
   const accountName = String(formData.get("account_name") ?? "").trim()
   if (!accountName) return { error: "Informe o nome da conta." }
+  const validStatus = ["ativa", "pausada", "restrita"]
+  const status = validStatus.includes(String(formData.get("status") ?? ""))
+    ? String(formData.get("status"))
+    : "ativa"
   const payload = {
-    bm_name: String(formData.get("bm_name") ?? "") || null,
+    bm_name: String(formData.get("bm_name") ?? "").trim() || null,
     account_name: accountName,
+    status,
   }
   const { error } = id
     ? await supabase.from("ad_accounts").update(payload).eq("id", id)

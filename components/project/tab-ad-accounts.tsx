@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { AdAccount, CardCharge, DailyMetric, Project } from "@/lib/types"
+import type { AdAccount, AdAccountStatus, CardCharge, DailyMetric, Project } from "@/lib/types"
 import { formatCurrency, formatPercent } from "@/lib/utils"
 import { fmtDate, computeTrafficTax } from "@/lib/finance"
 import {
   Card,
   CardContent,
   Button,
+  Badge,
   Field,
   Input,
   Select,
@@ -27,7 +28,14 @@ import {
   createExpense,
 } from "@/app/actions/projects"
 import { DEFAULT_CURRENCIES } from "@/lib/currency"
-import { Plus, Wallet, CreditCard, Receipt, TrendingDown } from "lucide-react"
+import { Plus, Wallet, CreditCard, Receipt, TrendingDown, Building2 } from "lucide-react"
+
+const STATUS: { value: AdAccountStatus; label: string; tone: "positive" | "warning" | "negative" }[] = [
+  { value: "ativa", label: "Ativa", tone: "positive" },
+  { value: "pausada", label: "Pausada", tone: "warning" },
+  { value: "restrita", label: "Restrita", tone: "negative" },
+]
+const statusMeta = (s: string) => STATUS.find((x) => x.value === s) ?? STATUS[0]
 
 export function TabAdAccounts({
   project,
@@ -53,6 +61,19 @@ export function TabAdAccounts({
   const adSpend = metrics.reduce((s, m) => s + m.spend, 0)
   const cardCharged = cardCharges.reduce((s, c) => s + c.amount, 0)
   const tax = computeTrafficTax(adSpend, cardCharged)
+
+  // Agrupa as contas por BM (a BM "segura" as contas). Contas sem BM caem em "Sem BM".
+  const NO_BM = "Sem BM"
+  const groupedByBm = (() => {
+    const map = new Map<string, AdAccount[]>()
+    for (const a of adAccounts) {
+      const key = a.bm_name?.trim() || NO_BM
+      const arr = map.get(key) ?? []
+      arr.push(a)
+      map.set(key, arr)
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  })()
 
   function submitAcc(formData: FormData) {
     setError(undefined)
@@ -138,45 +159,61 @@ export function TabAdAccounts({
           </Button>
         </div>
       </div>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <thead>
-              <tr>
-                <Th>Conta</Th>
-                <Th>BM</Th>
-                <Th className="text-right">Ações</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {adAccounts.length === 0 ? (
-                <tr>
-                  <Td colSpan={3} className="py-8 text-center text-muted">
-                    Nenhuma conta cadastrada.
-                  </Td>
-                </tr>
-              ) : (
-                adAccounts.map((a) => (
-                  <tr key={a.id}>
-                    <Td className="font-medium">{a.account_name}</Td>
-                    <Td className="text-muted">{a.bm_name ?? "—"}</Td>
-                    <Td className="text-right">
-                      <RowActions
-                        onEdit={() => {
-                          setEditingAcc(a)
-                          setError(undefined)
-                          setAccOpen(true)
-                        }}
-                        onDelete={() => deleteAdAccount(project.id, a.id)}
-                      />
-                    </Td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </Table>
-        </CardContent>
-      </Card>
+      {adAccounts.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted">
+            Nenhuma conta cadastrada.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {groupedByBm.map(([bm, accounts]) => (
+            <Card key={bm}>
+              <CardContent className="p-0">
+                <div className="flex items-center gap-2 border-b border-[color:var(--color-border)] px-4 py-2.5">
+                  <Building2 size={15} className="text-muted" />
+                  <span className="font-medium">{bm}</span>
+                  <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted">
+                    {accounts.length} {accounts.length === 1 ? "conta" : "contas"}
+                  </span>
+                </div>
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>Conta</Th>
+                      <Th>Status</Th>
+                      <Th className="text-right">Ações</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accounts.map((a) => {
+                      const meta = statusMeta(a.status)
+                      return (
+                        <tr key={a.id}>
+                          <Td className="font-medium">{a.account_name}</Td>
+                          <Td>
+                            <Badge tone={meta.tone}>{meta.label}</Badge>
+                          </Td>
+                          <Td className="text-right">
+                            <RowActions
+                              onEdit={() => {
+                                setEditingAcc(a)
+                                setError(undefined)
+                                setAccOpen(true)
+                              }}
+                              onDelete={() => deleteAdAccount(project.id, a.id)}
+                            />
+                          </Td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </Table>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Cobranças no cartão */}
       <div className="flex items-center justify-between">
@@ -242,11 +279,20 @@ export function TabAdAccounts({
       >
         <form action={submitAcc} className="flex flex-col gap-4">
           {editingAcc ? <input type="hidden" name="id" value={editingAcc.id} /> : null}
-          <Field label="Nome da conta">
-            <Input name="account_name" defaultValue={editingAcc?.account_name} required />
+          <Field label="Nome da BM" hint="A BM segura as contas. Contas com a mesma BM ficam agrupadas.">
+            <Input name="bm_name" defaultValue={editingAcc?.bm_name ?? ""} placeholder="Ex: BM Principal" />
           </Field>
-          <Field label="Nome da BM (opcional)">
-            <Input name="bm_name" defaultValue={editingAcc?.bm_name ?? ""} />
+          <Field label="Nome da conta de anúncio">
+            <Input name="account_name" defaultValue={editingAcc?.account_name} placeholder="Ex: CA 01" required />
+          </Field>
+          <Field label="Status">
+            <Select name="status" defaultValue={editingAcc?.status ?? "ativa"}>
+              {STATUS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
           </Field>
           {error ? <p className="text-sm text-negative">{error}</p> : null}
           <div className="flex justify-end gap-2">

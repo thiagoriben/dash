@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import type { Creative, Product, Project, Sale } from "@/lib/types"
 import { formatCurrency, formatNumber, safeDiv } from "@/lib/utils"
 import { creativeSemaphore } from "@/lib/finance"
+import { inputToProject, currencySymbol } from "@/lib/currency"
 import { Card, CardContent, Button, Field, Input, Select } from "@/components/ui"
 import { SemaphoreBadge } from "@/components/semaphore"
 import { Modal } from "@/components/modal"
@@ -34,12 +35,16 @@ export function TabCreatives({
   creatives,
   products,
   sales = [],
+  usdBrl = 1,
+  currencies = ["BRL", "USD", "EUR"],
 }: {
   project: Project
   creatives: Creative[]
   products: Product[]
   /** Vendas do projeto — usadas para atualizar vendas/faturamento reais de cada criativo. */
   sales?: Sale[]
+  usdBrl?: number
+  currencies?: string[]
 }) {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Creative | null>(null)
@@ -47,6 +52,13 @@ export function TabCreatives({
   const [error, setError] = useState<string>()
   const [preview, setPreview] = useState<Creative | null>(null)
   const router = useRouter()
+
+  const projectCurrency = String(project.currency).toUpperCase()
+  const currencyOptions = Array.from(
+    new Set([projectCurrency, "BRL", ...currencies].map((c) => c.toUpperCase())),
+  )
+  // Moeda em que o gasto do criativo está sendo digitado (convertido para a moeda do projeto ao salvar).
+  const [spendCurrency, setSpendCurrency] = useState(projectCurrency)
 
   // Agrega as vendas reais por criativo (quantidade e faturamento bruto).
   const salesByCreative = new Map<string, { count: number; revenue: number }>()
@@ -58,6 +70,9 @@ export function TabCreatives({
     salesByCreative.set(s.creative_id, cur)
   }
 
+  // Valores reais (vendas vinculadas) do criativo em edição — usados para sincronizar o modal com o card.
+  const editingReal = editing ? salesByCreative.get(editing.id) : undefined
+
   // orçamento de teste sugerido = margem do front-end * 1.75
   const front = products.find((f) => f.kind === "front")
   const testBudget = front ? (front.price - front.product_cost) * 1.75 : 0
@@ -65,17 +80,21 @@ export function TabCreatives({
 
   function openNew() {
     setEditing(null)
+    setSpendCurrency(projectCurrency)
     setError(undefined)
     setOpen(true)
   }
   function openEdit(c: Creative) {
     setEditing(c)
+    setSpendCurrency(projectCurrency)
     setError(undefined)
     setOpen(true)
   }
 
   function onSubmit(formData: FormData) {
     setError(undefined)
+    // Converte o gasto da moeda digitada para a moeda do projeto antes de salvar.
+    formData.set("spend", String(inputToProject(String(formData.get("spend") ?? ""), spendCurrency, projectCurrency, usdBrl)))
     startTransition(async () => {
       const res = editing
         ? await updateCreative(project.id, editing.id, formData)
@@ -217,14 +236,52 @@ export function TabCreatives({
               />
             </Field>
             <Field label="Gasto">
-              <Input name="spend" inputMode="decimal" placeholder="0,00" defaultValue={editing?.spend} />
+              <div className="flex gap-2">
+                <Input
+                  name="spend"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  defaultValue={editing?.spend}
+                  className="flex-1"
+                />
+                <Select
+                  aria-label="Moeda do gasto"
+                  value={spendCurrency}
+                  onChange={(e) => setSpendCurrency(e.target.value)}
+                  className="w-24 shrink-0"
+                >
+                  {currencyOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {currencySymbol(c)} {c}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </Field>
-            <Field label="Vendas">
-              <Input name="sales" inputMode="numeric" placeholder="0" defaultValue={editing?.sales} />
+            <Field
+              label="Vendas"
+              hint={editingReal ? "Automático pelas vendas vinculadas" : undefined}
+            >
+              <Input
+                name="sales"
+                inputMode="numeric"
+                placeholder="0"
+                defaultValue={editingReal ? editingReal.count : editing?.sales}
+                readOnly={!!editingReal}
+              />
             </Field>
           </div>
-          <Field label="Faturamento">
-            <Input name="revenue" inputMode="decimal" placeholder="0,00" defaultValue={editing?.revenue} />
+          <Field
+            label={`Faturamento (${projectCurrency})`}
+            hint={editingReal ? "Somado automaticamente das vendas vinculadas" : undefined}
+          >
+            <Input
+              name="revenue"
+              inputMode="decimal"
+              placeholder="0,00"
+              defaultValue={editingReal ? Number(editingReal.revenue.toFixed(2)) : editing?.revenue}
+              readOnly={!!editingReal}
+            />
           </Field>
 
           <div className="grid grid-cols-[1fr_auto] gap-3">

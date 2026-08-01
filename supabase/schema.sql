@@ -82,8 +82,10 @@ create table if not exists public.ad_accounts (
   project_id uuid not null references public.projects(id) on delete cascade,
   bm_name text,
   account_name text not null,
+  status text not null default 'ativa',   -- 'ativa' | 'pausada' | 'restrita'
   created_at timestamptz not null default now()
 );
+alter table public.ad_accounts add column if not exists status text not null default 'ativa';
 
 -- PRODUTOS
 create table if not exists public.products (

@@ -320,6 +320,8 @@ export function ProjectDetail(props: {
             creatives={props.creatives}
             products={props.products}
             sales={props.sales}
+            usdBrl={props.usdBrl}
+            currencies={props.currencies}
           />
         )}
         {tab === "Contas de anúncio" && (

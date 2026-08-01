@@ -8,7 +8,7 @@ import { timeSeries } from "@/lib/aggregate"
 import { buildBreakdown } from "@/lib/money"
 import { buildWidget, resolveWidgets, DEFAULT_PROJECT_WIDGETS } from "@/lib/dashboard-widgets"
 import { diagnoseFunnel } from "@/lib/finance"
-import { toBRL, currencySymbol, normalizeCurrency } from "@/lib/currency"
+import { currencySymbol, normalizeCurrency, inputToProject } from "@/lib/currency"
 import { formatPercent } from "@/lib/utils"
 import { KpiCard } from "@/components/kpi-card"
 import { SpendRevenueChart } from "@/components/spend-revenue-chart"
@@ -68,9 +68,12 @@ export function TabOverview({
   // ficando em sincronia com os números que a dashboard já mostra.
   const [metricDate, setMetricDate] = useState(() => new Date().toISOString().slice(0, 10))
   const dayMetric = useMemo(() => metrics.find((m) => m.date === metricDate) ?? null, [metrics, metricDate])
-  // Moeda em que o usuário digita gasto/faturamento do dia (o valor é convertido para a moeda do projeto ao salvar).
+  // Moeda em que o usuário digita gasto e faturamento do dia. Podem ser diferentes
+  // (ex.: gasto em BRL e faturamento em USD). Ambos são convertidos para a moeda do
+  // projeto ao salvar.
   const projectCurrency = String(project.currency).toUpperCase()
-  const [metricCurrency, setMetricCurrency] = useState(projectCurrency)
+  const [spendCurrency, setSpendCurrency] = useState(projectCurrency)
+  const [revenueCurrency, setRevenueCurrency] = useState(projectCurrency)
   const currencyOptions = useMemo(
     () => Array.from(new Set([projectCurrency, "BRL", ...currencies].map((c) => c.toUpperCase()))),
     [projectCurrency, currencies],
@@ -133,13 +136,8 @@ export function TabOverview({
   const brlToDisplay = (brl: number) => brlToCur(brl, chartCur)
 
   /** Converte um valor da moeda digitada para a moeda do projeto (armazenamento). */
-  function toProjectCurrency(raw: string): string {
-    const n = Number.parseFloat(String(raw ?? "").replace(",", ".")) || 0
-    if (n === 0 || metricCurrency === projectCurrency) return String(n)
-    const brl = toBRL(n, metricCurrency, usdBrl)
-    // De BRL para a moeda do projeto: se o projeto for BRL, fica em BRL; senão divide pela cotação.
-    const converted = projectCurrency === "BRL" ? brl : brl / (usdBrl || 1)
-    return String(+converted.toFixed(2))
+  function toProjectCurrency(raw: string, from: string): string {
+    return String(inputToProject(raw, from, projectCurrency, usdBrl))
   }
 
   const breakdown = useMemo(
@@ -172,9 +170,9 @@ export function TabOverview({
 
   function onSubmit(formData: FormData) {
     setError(undefined)
-    // Converte gasto/faturamento da moeda digitada para a moeda do projeto antes de salvar.
-    formData.set("spend", toProjectCurrency(String(formData.get("spend") ?? "")))
-    formData.set("revenue", toProjectCurrency(String(formData.get("revenue") ?? "")))
+    // Converte gasto e faturamento (cada um na sua moeda) para a moeda do projeto antes de salvar.
+    formData.set("spend", toProjectCurrency(String(formData.get("spend") ?? ""), spendCurrency))
+    formData.set("revenue", toProjectCurrency(String(formData.get("revenue") ?? ""), revenueCurrency))
     startTransition(async () => {
       const res = await upsertDailyMetric(project.id, formData)
       if (res?.error) setError(res.error)
@@ -382,28 +380,56 @@ export function TabOverview({
               required
             />
           </Field>
-          <Field
-            label="Moeda dos valores"
-            hint={
-              metricCurrency === projectCurrency
-                ? `Valores na moeda do projeto (${projectCurrency}).`
-                : `Digite em ${metricCurrency}; será convertido para ${projectCurrency} ao salvar.`
-            }
-          >
-            <Select value={metricCurrency} onChange={(e) => setMetricCurrency(e.target.value)}>
-              {currencyOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c} ({currencySymbol(c)})
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <p className="-mb-1 text-xs text-muted">
+            Gasto e faturamento podem estar em moedas diferentes (ex.: gasto em BRL, faturamento em
+            USD). Cada valor é convertido para a moeda do projeto ({projectCurrency}) ao salvar.
+          </p>
           <div className="grid grid-cols-2 gap-3">
-            <Field label={`Gasto (${metricCurrency})`}>
-              <Input name="spend" inputMode="decimal" placeholder="0,00" defaultValue={dayMetric?.spend ? String(dayMetric.spend) : ""} />
+            <Field label="Gasto">
+              <div className="flex gap-2">
+                <Input
+                  name="spend"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  defaultValue={dayMetric?.spend ? String(dayMetric.spend) : ""}
+                  className="flex-1"
+                />
+                <Select
+                  aria-label="Moeda do gasto"
+                  value={spendCurrency}
+                  onChange={(e) => setSpendCurrency(e.target.value)}
+                  className="w-24 shrink-0"
+                >
+                  {currencyOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {currencySymbol(c)} {c}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </Field>
-            <Field label={`Faturamento (${metricCurrency})`}>
-              <Input name="revenue" inputMode="decimal" placeholder="0,00" defaultValue={dayMetric?.revenue ? String(dayMetric.revenue) : ""} />
+            <Field label="Faturamento">
+              <div className="flex gap-2">
+                <Input
+                  name="revenue"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  defaultValue={dayMetric?.revenue ? String(dayMetric.revenue) : ""}
+                  className="flex-1"
+                />
+                <Select
+                  aria-label="Moeda do faturamento"
+                  value={revenueCurrency}
+                  onChange={(e) => setRevenueCurrency(e.target.value)}
+                  className="w-24 shrink-0"
+                >
+                  {currencyOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {currencySymbol(c)} {c}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </Field>
             <Field label="Impressões">
               <Input name="impressions" inputMode="numeric" placeholder="0" defaultValue={dayMetric?.impressions ? String(dayMetric.impressions) : ""} />

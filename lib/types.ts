@@ -68,6 +68,10 @@ export type Prefs = {
   currency_overrides?: Record<string, number>
   /** Presets de métricas salvos pelo usuário. */
   metric_presets?: MetricPreset[]
+  /** Pastas/categorias de projetos criadas pelo usuário (ordem preservada). */
+  project_folders?: string[]
+  /** Mapa projeto -> nome da pasta. Projetos ausentes ficam em "Geral". */
+  project_folder_map?: Record<string, string>
 }
 
 /** Preset de métricas reutilizável nas dashboards. */
@@ -241,11 +245,15 @@ export const SALE_ITEM_ROLE_LABELS: Record<SaleItemRole, string> = {
   downsell: "Downsell",
 }
 
+/** Situação da conta/BM: ativa, pausada ou restrita. */
+export type AdAccountStatus = "ativa" | "pausada" | "restrita"
+
 export type AdAccount = {
   id: string
   project_id: string
   bm_name: string | null
   account_name: string
+  status: AdAccountStatus
   created_at: string
 }
 
