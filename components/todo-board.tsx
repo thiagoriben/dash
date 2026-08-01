@@ -9,6 +9,7 @@ import {
   Check,
   Folder,
   CalendarDays,
+  Clock,
   ChevronDown,
   ChevronRight,
 } from "lucide-react"
@@ -18,6 +19,22 @@ import { RowActions } from "@/components/row-actions"
 import { cn } from "@/lib/utils"
 import type { TodoItem, Profile } from "@/lib/types"
 import { createTodo, updateTodo, toggleTodo, archiveTodo, deleteTodo } from "@/app/actions/todo"
+import { scheduleReminders, type ScheduledReminder } from "@/lib/pwa"
+
+/** Mapa de lembretes: id da tarefa -> { time: "HH:MM", lead: minutos antes }. */
+export type ReminderMap = Record<string, { time?: string; lead?: number }>
+
+/** Antecedências disponíveis para o lembrete. */
+const LEAD_OPTIONS: { value: number; label: string }[] = [
+  { value: 0, label: "Na hora" },
+  { value: 5, label: "5 min antes" },
+  { value: 10, label: "10 min antes" },
+  { value: 15, label: "15 min antes" },
+  { value: 30, label: "30 min antes" },
+  { value: 60, label: "1 h antes" },
+  { value: 120, label: "2 h antes" },
+  { value: 1440, label: "1 dia antes" },
+]
 
 /** Rótulo da área. Tarefa sem categoria cai em "Outros". */
 const OUTROS = "Outros"
@@ -67,12 +84,43 @@ export function TodoBoard({
   projectId,
   todos,
   members = [],
+  reminders = {},
+  notifEnabled = true,
 }: {
   projectId: string | null
   todos: TodoItem[]
   members?: Profile[]
+  /** Horários/antecedências por tarefa (vindos das prefs). */
+  reminders?: ReminderMap
+  /** Se o usuário habilitou lembretes de tarefas nas configurações. */
+  notifEnabled?: boolean
 }) {
   const [pending, startTransition] = React.useTransition()
+
+  // Agenda notificações locais das tarefas com horário definido (aba precisa estar aberta).
+  React.useEffect(() => {
+    if (!notifEnabled) {
+      scheduleReminders([])
+      return
+    }
+    const list: ScheduledReminder[] = []
+    for (const t of todos) {
+      if (t.done || t.archived || !t.due_date) continue
+      const r = reminders[t.id]
+      if (!r?.time) continue
+      const [hh, mm] = r.time.split(":").map(Number)
+      const [y, mo, d] = t.due_date.split("-").map(Number)
+      const at = new Date(y, mo - 1, d, hh || 0, mm || 0, 0, 0).getTime() - (r.lead ?? 0) * 60_000
+      list.push({
+        id: t.id,
+        at,
+        title: "Lembrete de tarefa",
+        body: t.title,
+      })
+    }
+    scheduleReminders(list)
+  }, [todos, reminders, notifEnabled])
+
   const [showDone, setShowDone] = React.useState(false)
   const [areaFilter, setAreaFilter] = React.useState<string>("todas")
   const [dateFilter, setDateFilter] = React.useState<DateFilter>("todas")
@@ -164,6 +212,7 @@ export function TodoBoard({
                 <TodoRow
                   key={t.id}
                   item={t}
+                  reminder={reminders[t.id]}
                   assignee={projectId ? memberName(t.assignee_id) : null}
                   onToggle={() => runToggle(t)}
                   onArchive={() => runArchive(t, true)}
@@ -194,6 +243,7 @@ export function TodoBoard({
         projectId={projectId}
         members={members}
         areas={areas}
+        reminder={modal.edit ? reminders[modal.edit.id] : undefined}
       />
     </div>
   )
@@ -250,6 +300,7 @@ function DoneSection({
 
 function TodoRow({
   item,
+  reminder,
   assignee,
   archivedView = false,
   onToggle,
@@ -259,6 +310,7 @@ function TodoRow({
   pending,
 }: {
   item: TodoItem
+  reminder?: { time?: string; lead?: number }
   assignee: string | null
   archivedView?: boolean
   onToggle: () => void
@@ -302,6 +354,11 @@ function TodoRow({
               <CalendarDays size={10} /> {dueLabel}
             </Badge>
           )}
+          {reminder?.time && (
+            <Badge tone="primary">
+              <Clock size={10} /> {reminder.time}
+            </Badge>
+          )}
           {assignee && (
             <Badge tone="primary">
               <User size={10} /> {assignee}
@@ -335,12 +392,14 @@ function TodoModal({
   projectId,
   members,
   areas,
+  reminder,
 }: {
   state: { open: boolean; edit?: TodoItem }
   onClose: () => void
   projectId: string | null
   members: Profile[]
   areas: string[]
+  reminder?: { time?: string; lead?: number }
 }) {
   const [pending, startTransition] = React.useTransition()
   const [error, setError] = React.useState<string | null>(null)
@@ -376,6 +435,20 @@ function TodoModal({
           </Field>
           <Field label="Prazo (opcional)">
             <Input name="due_date" type="date" defaultValue={edit?.due_date ?? ""} />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Horário" hint="Para receber lembrete (precisa de prazo).">
+            <Input name="time" type="time" defaultValue={reminder?.time ?? ""} />
+          </Field>
+          <Field label="Lembrar">
+            <Select name="lead" defaultValue={String(reminder?.lead ?? 0)}>
+              {LEAD_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
           </Field>
         </div>
         {projectId && members.length > 0 && (

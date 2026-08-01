@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import type { Profile } from "@/lib/types"
 import { LogoutButton } from "@/components/logout-button"
+import { InstallCard } from "@/components/install-card"
 import {
   LayoutDashboard,
   FolderKanban,
@@ -149,6 +150,7 @@ export function MobileNav({
             </div>
 
             <div className="flex flex-col gap-4 p-4">
+              <InstallCard />
               <MenuSection title="Social" items={social} isActive={isActive} />
               <MenuSection title="Organização" items={organizacao} isActive={isActive} />
               <MenuSection title="Conta" items={conta} isActive={isActive} />

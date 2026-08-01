@@ -8,9 +8,10 @@ import { getCurrencyOverrides, getTrackedCurrencies } from "@/app/actions/curren
 import { PerfilClient } from "@/components/perfil-client"
 import { ListEditor } from "@/components/list-editor"
 import { CurrencyPopover } from "@/components/currency-popover"
+import { NotifSettings } from "@/components/notif-settings"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui"
 import { DEFAULT_CURRENCIES, DEFAULT_OFFER_TYPES, DEFAULT_REGIONS, DEFAULT_SOURCES } from "@/lib/currency"
-import { CreditCard, ChevronRight, Coins, SlidersHorizontal } from "lucide-react"
+import { CreditCard, ChevronRight, Coins, SlidersHorizontal, Bell } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -99,6 +100,22 @@ export default async function PerfilPage() {
               placeholder="ex: tráfego pago"
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Notificações e lembretes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell size={18} className="text-accent" />
+            Notificações
+          </CardTitle>
+          <CardDescription>
+            Ative os alertas do navegador e configure os lembretes de tarefas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <NotifSettings initial={prefs.notif_settings ?? {}} />
         </CardContent>
       </Card>
 

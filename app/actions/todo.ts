@@ -31,6 +31,23 @@ function pathFor(projectId: string | null) {
   return projectId ? `/projetos/${projectId}` : "/organizacao/tarefas"
 }
 
+/**
+ * Salva/remove o horário e antecedência do lembrete de uma tarefa nas prefs
+ * do usuário (não há colunas no banco). time = "HH:MM", lead = minutos antes.
+ */
+async function saveTaskReminder(userId: string, todoId: string, time: string, lead: number) {
+  const supabase = await createClient()
+  const { data } = await supabase.from("profiles").select("prefs").eq("id", userId).maybeSingle()
+  const prefs = (data?.prefs ?? {}) as Record<string, unknown>
+  const map = { ...((prefs.task_reminders as Record<string, { time?: string; lead?: number }>) ?? {}) }
+  if (time) map[todoId] = { time, lead: Number.isFinite(lead) ? lead : 0 }
+  else delete map[todoId]
+  await supabase
+    .from("profiles")
+    .update({ prefs: { ...prefs, task_reminders: map } })
+    .eq("id", userId)
+}
+
 export async function createTodo(projectId: string | null, formData: FormData) {
   const supabase = await createClient()
   const me = await getCurrentProfile()
@@ -40,16 +57,24 @@ export async function createTodo(projectId: string | null, formData: FormData) {
   const category = parseCategory(formData.get("category"))
   const due_date = String(formData.get("due_date") ?? "").trim() || null
   const assignee_id = String(formData.get("assignee_id") ?? "").trim() || null
-  const { error } = await supabase.from("todo_items").insert({
-    owner_id: me.id,
-    project_id: projectId,
-    assignee_id: projectId ? assignee_id : null,
-    category,
-    title,
-    due_date,
-    due_kind: dueKindFromDate(due_date),
-  })
+  const { data: created, error } = await supabase
+    .from("todo_items")
+    .insert({
+      owner_id: me.id,
+      project_id: projectId,
+      assignee_id: projectId ? assignee_id : null,
+      category,
+      title,
+      due_date,
+      due_kind: dueKindFromDate(due_date),
+    })
+    .select("id")
+    .maybeSingle()
   if (error) return { error: error.message }
+  // Horário + antecedência do lembrete (salvos nas prefs).
+  const time = String(formData.get("time") ?? "").trim()
+  const lead = Number.parseInt(String(formData.get("lead") ?? "0"), 10) || 0
+  if (created?.id) await saveTaskReminder(me.id, created.id, time, lead)
   revalidatePath(pathFor(projectId))
   return { ok: true }
 }
@@ -78,6 +103,12 @@ export async function updateTodo(id: string, formData: FormData) {
     .select("project_id")
     .maybeSingle()
   if (error) return { error: error.message }
+  // Atualiza horário/antecedência do lembrete se enviados.
+  const time = formData.get("time")
+  if (time != null) {
+    const lead = Number.parseInt(String(formData.get("lead") ?? "0"), 10) || 0
+    await saveTaskReminder(me.id, id, String(time).trim(), lead)
+  }
   revalidatePath(pathFor(data?.project_id ?? null))
   return { ok: true }
 }

@@ -62,6 +62,8 @@ export function OrganizacaoClient({
   only,
   title,
   description,
+  reminders = {},
+  notifEnabled = true,
 }: {
   projectId: string | null
   categories: ShortcutCategory[]
@@ -69,6 +71,10 @@ export function OrganizacaoClient({
   notes: Note[]
   todos?: TodoItem[]
   members?: Profile[]
+  /** Horários/antecedências por tarefa (das prefs). */
+  reminders?: Record<string, { time?: string; lead?: number }>
+  /** Lembretes de tarefas habilitados nas configurações. */
+  notifEnabled?: boolean
   /** Amigos aceitos, para compartilhar notas pessoais. */
   friends?: FriendOption[]
   /** Id do usuário logado, para distinguir notas próprias das compartilhadas comigo. */
@@ -147,7 +153,13 @@ export function OrganizacaoClient({
       </div>
 
       {tab === "tarefas" ? (
-        <TodoBoard projectId={projectId} todos={todos} members={members} />
+        <TodoBoard
+          projectId={projectId}
+          todos={todos}
+          members={members}
+          reminders={reminders}
+          notifEnabled={notifEnabled}
+        />
       ) : empty ? (
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">

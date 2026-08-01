@@ -11,6 +11,9 @@ export default async function TarefasPage() {
     getShortcutCategories(profile.id, null),
     getTodos(profile.id, null),
   ])
+  const prefs = profile.prefs ?? {}
+  const reminders = prefs.task_reminders ?? {}
+  const notifEnabled = prefs.notif_settings?.task_reminders !== false
   return (
     <OrganizacaoClient
       projectId={null}
@@ -21,6 +24,8 @@ export default async function TarefasPage() {
       shortcuts={[]}
       notes={[]}
       todos={todos}
+      reminders={reminders}
+      notifEnabled={notifEnabled}
     />
   )
 }
