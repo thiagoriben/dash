@@ -27,7 +27,7 @@ type ButtonVariant = "primary" | "outline" | "ghost" | "danger"
 type ButtonSize = "sm" | "md" | "icon"
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    "bg-primary text-[#04121a] font-semibold hover:brightness-110 shadow-[0_0_20px_rgba(45,226,230,0.25)]",
+    "bg-primary text-[color:var(--brand-fg)] font-semibold hover:brightness-110 shadow-[0_0_22px_color-mix(in_srgb,var(--brand)_35%,transparent)]",
   outline: "border border-[color:var(--color-border-strong)] text-foreground hover:bg-white/5",
   ghost: "text-muted hover:text-foreground hover:bg-white/5",
   danger: "bg-negative/90 text-white font-semibold hover:bg-negative",
@@ -45,7 +45,7 @@ export const Button = React.forwardRef<
     <button
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap transition-all disabled:pointer-events-none disabled:opacity-50",
+        "press inline-flex items-center justify-center gap-2 whitespace-nowrap transition-all disabled:pointer-events-none disabled:opacity-50",
         buttonVariants[variant],
         buttonSizes[size],
         className,

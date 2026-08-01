@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback } from "react"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { setSidebarCollapsed } from "@/app/actions/projects"
 import { PrivacyProvider } from "@/components/privacy"
@@ -29,6 +30,7 @@ export function AppShell({
   children: React.ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
+  const pathname = usePathname()
 
   const toggle = useCallback(() => {
     setCollapsed((c) => {
@@ -48,7 +50,10 @@ export function AppShell({
             {topbar}
             {mobileNav}
             {banner}
-            <main className="mx-auto max-w-7xl px-4 py-6 pb-24 md:px-6 md:py-8 md:pb-8">
+            <main
+              key={pathname}
+              className="animate-rise-in mx-auto max-w-7xl px-4 py-6 pb-24 md:px-6 md:py-8 md:pb-8"
+            >
               {children}
             </main>
           </div>

@@ -31,6 +31,17 @@ function audioCtx(): AudioContext | null {
   }
 }
 
+/**
+ * Destrava o AudioContext num gesto do usuário. Sem isso, os navegadores
+ * mantêm o contexto "suspended" e os sons disparados por eventos (realtime,
+ * lembretes) ficam mudos. Deve ser chamado num pointerdown/keydown.
+ */
+export function primeSound() {
+  const ac = audioCtx()
+  if (!ac) return
+  if (ac.state === "suspended") ac.resume().catch(() => {})
+}
+
 /** Toca uma sequência de tons curtos. Silencioso quando mudo. */
 function playTones(tones: { freq: number; start: number; dur: number }[], gainPeak = 0.08) {
   if (isSoundMuted()) return
