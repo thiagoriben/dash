@@ -96,11 +96,14 @@ export async function updateTodo(id: string, formData: FormData) {
     patch.due_kind = dueKindFromDate(d)
   }
   if (assignee_id != null) patch.assignee_id = String(assignee_id).trim() || null
-  // Atribuir/mover a tarefa a um projeto (ou de volta ao pessoal).
+  // Atribuir a tarefa a um projeto SÓ se ela ainda for pessoal. Tarefa de projeto fica travada.
   if (formData.has("project_id")) {
-    const newScope = String(formData.get("project_id") ?? "").trim() || null
-    patch.project_id = newScope
-    if (!newScope) patch.assignee_id = null // pessoal não tem responsável
+    const { data: cur } = await supabase.from("todo_items").select("project_id").eq("id", id).maybeSingle()
+    if (!cur?.project_id) {
+      const newScope = String(formData.get("project_id") ?? "").trim() || null
+      patch.project_id = newScope
+      if (!newScope) patch.assignee_id = null // pessoal não tem responsável
+    }
   }
   const { data, error } = await supabase
     .from("todo_items")

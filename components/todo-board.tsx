@@ -418,7 +418,8 @@ function TodoModal({
     if (state.open) setScope(projectId ?? "")
   }, [state.open, projectId])
 
-  const showScopePicker = projectOptions.length > 0
+  // Só tarefa pessoal pode ser atribuída a um projeto. Tarefa de projeto fica travada nele.
+  const showScopePicker = projectOptions.length > 0 && projectId === null
   const scopeUnchanged = scope === (projectId ?? "")
   // Responsável só quando a tarefa está no projeto atual do quadro (que conhece os membros).
   const showAssignee = scopeUnchanged && scope !== "" && members.length > 0

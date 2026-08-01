@@ -209,8 +209,9 @@ export async function updateNote(id: string, formData: FormData) {
 
   const { data: noteRow } = await supabase.from("notes").select("project_id, owner_id").eq("id", id).maybeSingle()
 
-  // Atribuir/mover a nota a um projeto (ou de volta ao pessoal).
-  const hasScopeField = formData.has("project_id")
+  // Atribuir a nota a um projeto SÓ se ela ainda for pessoal. Nota de projeto fica travada.
+  const wasPersonal = !noteRow?.project_id
+  const hasScopeField = formData.has("project_id") && wasPersonal
   const newScope = hasScopeField ? String(formData.get("project_id") ?? "").trim() || null : undefined
   const scopeChanged = hasScopeField && newScope !== (noteRow?.project_id ?? null)
   if (scopeChanged) {

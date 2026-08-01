@@ -612,7 +612,8 @@ function NoteModal({
     }
   }, [state.open, edit, projectId])
 
-  const showScopePicker = projectOptions.length > 0
+  // Só nota pessoal pode ser atribuída a um projeto. Nota já de projeto fica travada nele.
+  const showScopePicker = projectOptions.length > 0 && projectId === null
   const scopeChanged = scope !== (projectId ?? "")
   // Compartilhar só quando a nota é/continua pessoal.
   const personal = scope === ""
