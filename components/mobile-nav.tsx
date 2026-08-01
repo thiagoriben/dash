@@ -92,10 +92,12 @@ export function MobileNav({
 
   const toggleShortcut = (href: string) => {
     if (shortcuts.includes(href)) {
-      if (shortcuts.length <= 1) return // mantém pelo menos 1
+      // Remover sempre funciona — o botão Menu garante acesso a tudo mesmo com 0 atalhos.
       persist(shortcuts.filter((h) => h !== href))
+    } else if (shortcuts.length >= MAX_SHORTCUTS) {
+      // Barra cheia: troca o atalho mais antigo pelo novo, então adicionar nunca "não dá".
+      persist([...shortcuts.slice(1), href])
     } else {
-      if (shortcuts.length >= MAX_SHORTCUTS) return
       persist([...shortcuts, href])
     }
   }
@@ -295,6 +297,10 @@ function ShortcutEditor({
   shortcuts: string[]
   onToggle: (href: string) => void
 }) {
+  // Itens na ordem exata em que aparecem na barra.
+  const orderedShortcuts = shortcuts
+    .map((h) => CATALOG.find((c) => c.href === h))
+    .filter((x): x is Item => Boolean(x))
   return (
     <div className="rounded-2xl border border-[color:var(--color-border)] p-3">
       <div className="flex items-center justify-between pb-1">
@@ -313,27 +319,52 @@ function ShortcutEditor({
       </div>
       {editing ? (
         <>
-          <p className="pb-2 text-xs text-muted">
-            Escolha até {MAX_SHORTCUTS} ferramentas para a barra de acesso rápido.
+          <p className="pb-1 text-xs text-muted">
+            Toque para adicionar ou remover. Com a barra cheia, o novo substitui o mais antigo.
           </p>
+          <p className="pb-2 text-[11px] font-medium text-muted">
+            <span className="text-primary">{shortcuts.length}</span>/{MAX_SHORTCUTS} atalhos selecionados
+          </p>
+
+          {/* Prévia da barra: atalhos escolhidos + Menu fixo. */}
+          <div className="mb-3 flex items-center gap-1.5 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-2">
+            {orderedShortcuts.length === 0 && (
+              <span className="px-1 text-[11px] text-muted">Só o Menu na barra</span>
+            )}
+            {orderedShortcuts.map((item) => {
+              const Icon = item.icon
+              return (
+                <span
+                  key={item.href}
+                  className="flex flex-1 flex-col items-center gap-0.5 text-[9px] font-medium text-primary"
+                >
+                  <Icon size={16} />
+                  <span className="max-w-full truncate">{item.label}</span>
+                </span>
+              )
+            })}
+            {/* Menu: sempre presente e não removível (garante acesso a tudo). */}
+            <span className="flex flex-1 flex-col items-center gap-0.5 text-[9px] font-medium text-muted">
+              <Menu size={16} />
+              Menu
+            </span>
+          </div>
+
           <div className="grid grid-cols-3 gap-2">
             {CATALOG.map((item) => {
               const on = shortcuts.includes(item.href)
-              const disabled = !on && shortcuts.length >= MAX_SHORTCUTS
               const Icon = item.icon
               return (
                 <button
                   key={item.href}
                   type="button"
                   onClick={() => onToggle(item.href)}
-                  disabled={disabled}
                   aria-pressed={on}
                   className={cn(
                     "relative flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center text-xs font-medium transition-colors",
                     on
                       ? "border-primary/40 bg-primary/10 text-primary"
                       : "border-[color:var(--color-border)] text-muted hover:bg-white/5 hover:text-foreground",
-                    disabled && "cursor-not-allowed opacity-40",
                   )}
                 >
                   {on && (
