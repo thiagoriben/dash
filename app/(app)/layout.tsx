@@ -61,7 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Topbar meId={profile?.id ?? null} notifications={notifications} currentPath="" />
         </Suspense>
       }
-      mobileNav={<MobileNav profile={profile} pending={pending.length} unreadChat={unreadChat} />}
+      mobileNav={<MobileNav profile={profile} pending={pending} unreadChat={unreadChat} />}
       banner={showEmailNotice ? <EmailNoticeBanner /> : null}
     >
       {children}
