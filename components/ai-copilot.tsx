@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Sparkles, Mic, MicOff, Send, Trash2, Check, Loader2, Edit3, AlertCircle, HelpCircle, Folder, Tag, Calendar, DollarSign, Plus } from "lucide-react"
+import { Sparkles, Mic, MicOff, Send, Trash2, Check, Loader2, Edit3, AlertCircle, HelpCircle, Folder, Tag, Calendar, DollarSign, Plus, X } from "lucide-react"
 import { Button, Input, Card, Badge, Select } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { cn } from "@/lib/utils"
