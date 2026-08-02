@@ -31,7 +31,7 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
   const [pending, startTransition] = React.useTransition()
 
   const [contextData, setContextData] = React.useState<{
-    projects: { id: string; name: string }[]
+    projects: { id: string; name: string; currency?: string }[]
     categories: { id: string; name: string }[]
   }>({ projects: [], categories: [] })
 
@@ -365,7 +365,7 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
                             <div className="grid grid-cols-2 gap-2">
                               <div>
                                 <label className="flex items-center gap-1 text-[10px] text-muted">
-                                  <DollarSign size={10} /> Valor (R$):
+                                  <DollarSign size={10} /> Valor ({contextData.projects.find((p) => p.id === act.payload.project_id)?.currency || "BRL"}):
                                 </label>
                                 <Input
                                   type="number"
@@ -393,7 +393,7 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
                             <div className="grid grid-cols-2 gap-2">
                               <div>
                                 <label className="flex items-center gap-1 text-[10px] text-muted">
-                                  <DollarSign size={10} /> Valor Bruto (R$):
+                                  <DollarSign size={10} /> Valor Bruto ({contextData.projects.find((p) => p.id === act.payload.project_id)?.currency || "BRL"}):
                                 </label>
                                 <Input
                                   type="number"
@@ -420,7 +420,7 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
                           {act.type === "create_daily_metric" && (
                             <div className="flex flex-col gap-1">
                               <label className="flex items-center gap-1 text-[10px] text-muted">
-                                <DollarSign size={10} /> Gasto com Ads (R$):
+                                <DollarSign size={10} /> Gasto com Ads ({contextData.projects.find((p) => p.id === act.payload.project_id)?.currency || "BRL"}):
                               </label>
                               <Input
                                 type="number"
