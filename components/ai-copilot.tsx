@@ -144,11 +144,11 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
     setPrompt("")
 
     startTransition(async () => {
-      // Se já existirem ações pendentes na última mensagem, atualizamos o contexto
-      const lastAiMsg = [...messages].reverse().find((m) => m.sender === "ai" && m.actions && m.actions.length > 0)
+      // Encontra a última mensagem enviada pelo usuário como contexto
+      const lastUserMsg = [...messages].reverse().find((m) => m.sender === "user")?.text ?? null
       const res: AiProcessResult = await processAiCommand(query, {
         projectId,
-        previousActions: lastAiMsg?.actions
+        previousPrompt: lastUserMsg
       })
 
       if (res.availableContext) {
