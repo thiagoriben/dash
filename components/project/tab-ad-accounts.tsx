@@ -28,6 +28,7 @@ import {
   createExpense,
 } from "@/app/actions/projects"
 import { DEFAULT_CURRENCIES } from "@/lib/currency"
+import { getFacebookConnectUrl, syncFacebookAdMetrics, saveFacebookCredentials } from "@/app/actions/facebook"
 import { Plus, Wallet, CreditCard, Receipt, TrendingDown, Building2 } from "lucide-react"
 
 const STATUS: { value: AdAccountStatus; label: string; tone: "positive" | "warning" | "negative" }[] = [
@@ -142,6 +143,75 @@ export function TabAdAccounts({
           accent="warning"
         />
       </div>
+
+      {/* META FACEBOOK ADS INTEGRATION BANNER */}
+      <Card className="p-5 border border-primary/20 bg-primary/5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-lg">
+              f
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-display font-semibold text-foreground">Conexão Meta (Facebook Ads)</h3>
+                {(project as any).meta_token ? (
+                  <Badge tone="positive">✅ Conectado</Badge>
+                ) : (
+                  <Badge tone="warning">⚠️ Não Conectado</Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted">
+                {(project as any).meta_token
+                  ? `Conta de Anúncios: ${(project as any).meta_ad_account_id || "Padrão"} · Gastos sincronizados via Meta API.`
+                  : "Conecte sua conta do Facebook Ads para marcar automaticamente os gastos diários em anúncios."}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={async () => {
+                const res = await getFacebookConnectUrl(project.id)
+                if (res?.url) window.location.href = res.url
+              }}
+            >
+              🔵 {(project as any).meta_token ? "Reconectar Facebook" : "Conectar Facebook Ads"}
+            </Button>
+
+            {(project as any).meta_token && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={pending}
+                onClick={() => {
+                  startTransition(async () => {
+                    const res = await syncFacebookAdMetrics(project.id)
+                    if (res?.error) setError(res.error)
+                    else router.refresh()
+                  })
+                }}
+              >
+                🔄 {pending ? "Sincronizando..." : "Sincronizar Gastos"}
+              </Button>
+            )}
+
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                const res = await getFacebookConnectUrl(project.id)
+                if (res?.url) {
+                  await navigator.clipboard.writeText(res.url)
+                  alert("Link de Conexão Multilogin copiado! Cole no seu navegador antidetect/multilogin.")
+                }
+              }}
+            >
+              🔗 Copiar Link Multilogin
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       {/* Contas */}
       <div className="flex items-center justify-between">

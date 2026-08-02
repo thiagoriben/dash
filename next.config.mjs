@@ -1,4 +1,4 @@
-// Resolve as credenciais do Supabase e VAPID Web Push a partir do ambiente ou fallbacks fornecidos
+// Resolve as credenciais do Supabase, VAPID Web Push e Meta Facebook Ads
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
@@ -22,6 +22,19 @@ const CRON_SECRET =
   process.env.CRON_SECRET ||
   "35223281tT!"
 
+const FACEBOOK_APP_ID =
+  process.env.FACEBOOK_APP_ID ||
+  process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+  "1581224863381354"
+
+const FACEBOOK_APP_SECRET =
+  process.env.FACEBOOK_APP_SECRET ||
+  "b2b007d2d11812035b77bc615f02f786"
+
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "https://bandodash.vercel.app"
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: { root: import.meta.dirname },
@@ -33,6 +46,10 @@ const nextConfig = {
     VAPID_PUBLIC_KEY: VAPID_PUBLIC,
     VAPID_PRIVATE_KEY: VAPID_PRIVATE,
     CRON_SECRET: CRON_SECRET,
+    FACEBOOK_APP_ID: FACEBOOK_APP_ID,
+    NEXT_PUBLIC_FACEBOOK_APP_ID: FACEBOOK_APP_ID,
+    FACEBOOK_APP_SECRET: FACEBOOK_APP_SECRET,
+    NEXT_PUBLIC_APP_URL: APP_URL,
   },
   async headers() {
     return [
