@@ -33,7 +33,8 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
   const [contextData, setContextData] = React.useState<{
     projects: { id: string; name: string; currency?: string }[]
     categories: { id: string; name: string }[]
-  }>({ projects: [], categories: [] })
+    usdBrlRate?: number
+  }>({ projects: [], categories: [], usdBrlRate: 5.0 })
 
   const [messages, setMessages] = React.useState<Message[]>([
     {
@@ -362,72 +363,121 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
 
                           {/* VALOR E TIPO FINANCEIRO (CAIXA) */}
                           {act.type === "create_cash_entry" && (
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="flex items-center gap-1 text-[10px] text-muted">
-                                  <DollarSign size={10} /> Valor ({contextData.projects.find((p) => p.id === act.payload.project_id)?.currency || "BRL"}):
-                                </label>
-                                <Input
-                                  type="number"
-                                  value={act.payload.amount || 0}
-                                  onChange={(e) => updateActionPayload(m.id, act.id, "amount", parseFloat(e.target.value) || 0)}
-                                  className="h-8 text-xs"
-                                />
+                            <div className="flex flex-col gap-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="flex items-center gap-1 text-[10px] text-muted">
+                                    <DollarSign size={10} /> Valor Digitado:
+                                  </label>
+                                  <Input
+                                    type="number"
+                                    value={act.payload.amount || 0}
+                                    onChange={(e) => updateActionPayload(m.id, act.id, "amount", parseFloat(e.target.value) || 0)}
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted">Moeda do Valor:</label>
+                                  <Select
+                                    value={act.payload.input_currency || "BRL"}
+                                    onChange={(e) => updateActionPayload(m.id, act.id, "input_currency", e.target.value)}
+                                    className="h-8 text-xs"
+                                  >
+                                    <option value="BRL">R$ (BRL)</option>
+                                    <option value="USD">US$ (USD)</option>
+                                  </Select>
+                                </div>
                               </div>
-                              <div>
-                                <label className="text-[10px] text-muted">Tipo:</label>
-                                <Select
-                                  value={act.payload.type || "saida"}
-                                  onChange={(e) => updateActionPayload(m.id, act.id, "type", e.target.value)}
-                                  className="h-8 text-xs"
-                                >
-                                  <option value="saida">Saída (Despesa)</option>
-                                  <option value="entrada">Entrada (Receita)</option>
-                                </Select>
-                              </div>
+                              {(() => {
+                                const proj = contextData.projects.find((p) => p.id === act.payload.project_id)
+                                const inputCur = act.payload.input_currency || "BRL"
+                                const projCur = proj?.currency || "BRL"
+                                if (inputCur !== projCur && act.payload.amount > 0) {
+                                  const usdRate = contextData.usdBrlRate || 5.0
+                                  const conv = inputCur === "BRL" ? act.payload.amount / usdRate : act.payload.amount * usdRate
+                                  return (
+                                    <span className="text-[10px] text-primary font-medium">
+                                      💡 {inputCur === "BRL" ? "R$" : "US$"} {act.payload.amount.toFixed(2)} ➔ {projCur === "USD" ? "US$" : "R$"} {conv.toFixed(2)} (no projeto {proj?.name})
+                                    </span>
+                                  )
+                                }
+                                return null
+                              })()}
                             </div>
                           )}
 
                           {/* REGISTRAR VENDA */}
                           {act.type === "create_sale" && (
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="flex items-center gap-1 text-[10px] text-muted">
-                                  <DollarSign size={10} /> Valor Bruto ({contextData.projects.find((p) => p.id === act.payload.project_id)?.currency || "BRL"}):
-                                </label>
-                                <Input
-                                  type="number"
-                                  value={act.payload.gross_amount || 0}
-                                  onChange={(e) => updateActionPayload(m.id, act.id, "gross_amount", parseFloat(e.target.value) || 0)}
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-muted">Pagamento:</label>
-                                <Select
-                                  value={act.payload.payment_method || "pix"}
-                                  onChange={(e) => updateActionPayload(m.id, act.id, "payment_method", e.target.value)}
-                                  className="h-8 text-xs"
-                                >
-                                  <option value="pix">PIX</option>
-                                  <option value="cartao">Cartão de Crédito</option>
-                                </Select>
+                            <div className="flex flex-col gap-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="flex items-center gap-1 text-[10px] text-muted">
+                                    <DollarSign size={10} /> Valor Bruto:
+                                  </label>
+                                  <Input
+                                    type="number"
+                                    value={act.payload.gross_amount || 0}
+                                    onChange={(e) => updateActionPayload(m.id, act.id, "gross_amount", parseFloat(e.target.value) || 0)}
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted">Moeda Digitada:</label>
+                                  <Select
+                                    value={act.payload.input_currency || (contextData.projects.find((p) => p.id === act.payload.project_id)?.currency || "BRL")}
+                                    onChange={(e) => updateActionPayload(m.id, act.id, "input_currency", e.target.value)}
+                                    className="h-8 text-xs"
+                                  >
+                                    <option value="BRL">R$ (BRL)</option>
+                                    <option value="USD">US$ (USD)</option>
+                                  </Select>
+                                </div>
                               </div>
                             </div>
                           )}
 
                           {/* MÉTRICAS DIÁRIAS (GASTO ADS) */}
                           {act.type === "create_daily_metric" && (
-                            <div className="flex flex-col gap-1">
-                              <label className="flex items-center gap-1 text-[10px] text-muted">
-                                <DollarSign size={10} /> Gasto com Ads ({contextData.projects.find((p) => p.id === act.payload.project_id)?.currency || "BRL"}):
-                              </label>
-                              <Input
-                                type="number"
-                                value={act.payload.spend || 0}
-                                onChange={(e) => updateActionPayload(m.id, act.id, "spend", parseFloat(e.target.value) || 0)}
-                                className="h-8 text-xs"
-                              />
+                            <div className="flex flex-col gap-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="flex items-center gap-1 text-[10px] text-muted">
+                                    <DollarSign size={10} /> Gasto em Ads:
+                                  </label>
+                                  <Input
+                                    type="number"
+                                    value={act.payload.spend || 0}
+                                    onChange={(e) => updateActionPayload(m.id, act.id, "spend", parseFloat(e.target.value) || 0)}
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted">Moeda do Gasto:</label>
+                                  <Select
+                                    value={act.payload.input_currency || "BRL"}
+                                    onChange={(e) => updateActionPayload(m.id, act.id, "input_currency", e.target.value)}
+                                    className="h-8 text-xs"
+                                  >
+                                    <option value="BRL">R$ (BRL - Anúncios no BR)</option>
+                                    <option value="USD">US$ (USD - Anúncios em Dólar)</option>
+                                  </Select>
+                                </div>
+                              </div>
+                              {(() => {
+                                const proj = contextData.projects.find((p) => p.id === act.payload.project_id)
+                                const inputCur = act.payload.input_currency || "BRL"
+                                const projCur = proj?.currency || "BRL"
+                                if (inputCur !== projCur && act.payload.spend > 0) {
+                                  const usdRate = contextData.usdBrlRate || 5.0
+                                  const conv = inputCur === "BRL" ? act.payload.spend / usdRate : act.payload.spend * usdRate
+                                  return (
+                                    <span className="text-[10px] text-primary font-medium">
+                                      💡 Gasto em {inputCur === "BRL" ? "R$" : "US$"} {act.payload.spend.toFixed(2)} ➔ {projCur === "USD" ? "US$" : "R$"} {conv.toFixed(2)} salvos no projeto ({proj?.name})
+                                    </span>
+                                  )
+                                }
+                                return null
+                              })()}
                             </div>
                           )}
 

@@ -6,6 +6,8 @@ import { getCurrentProfile, savePrefs } from "@/lib/data"
 import { createTodo, updateTodo, toggleTodo, deleteTodo } from "@/app/actions/todo"
 import { createNote, updateNote, deleteNote, createShortcut, deleteShortcut, createCategory, deleteCategory } from "@/app/actions/organizacao"
 import { createProject, deleteProject } from "@/app/actions/projects"
+import { getUsdBrlRate } from "@/lib/currency-server"
+import { inputToProject, currencySymbol } from "@/lib/currency"
 
 export type AiActionType =
   | "create_todo"
@@ -53,6 +55,7 @@ export type AiProcessResult = {
     projects: { id: string; name: string; currency: string }[]
     categories: { id: string; name: string }[]
     memories: string[]
+    usdBrlRate: number
   }
 }
 
@@ -67,17 +70,18 @@ function normalize(str: string): string {
 }
 
 /**
- * Coleta os projetos (com moeda real), categorias e memórias de aprendizado do usuário.
+ * Coleta os projetos (com moeda nativa), categorias, taxa de câmbio USD/BRL e memórias do usuário.
  */
 export async function getAiContextData() {
   try {
     const supabase = await createClient()
     const me = await getCurrentProfile()
-    if (!me) return { projects: [], categories: [], memories: [] }
+    if (!me) return { projects: [], categories: [], memories: [], usdBrlRate: 5.0 }
 
-    const [{ data: projects }, { data: categories }] = await Promise.all([
+    const [{ data: projects }, { data: categories }, usdBrlRate] = await Promise.all([
       supabase.from("projects").select("id, name, currency").order("name"),
-      supabase.from("shortcut_categories").select("id, name").order("name")
+      supabase.from("shortcut_categories").select("id, name").order("name"),
+      getUsdBrlRate()
     ])
 
     const memories = (me.prefs?.ai_memories as string[]) ?? []
@@ -89,16 +93,17 @@ export async function getAiContextData() {
         currency: (p.currency || "BRL").toUpperCase()
       })),
       categories: (categories ?? []) as { id: string; name: string }[],
-      memories
+      memories,
+      usdBrlRate
     }
   } catch (err) {
     console.error("Error fetching context data:", err)
-    return { projects: [], categories: [], memories: [] }
+    return { projects: [], categories: [], memories: [], usdBrlRate: 5.0 }
   }
 }
 
 /**
- * Registra um novo aprendizado permanente na memória do usuário para aperfeiçoar a IA.
+ * Registra um novo aprendizado permanente na memória do usuário.
  */
 export async function recordAiMemory(memoryText: string) {
   try {
@@ -106,7 +111,7 @@ export async function recordAiMemory(memoryText: string) {
     if (!me) return
     const current = (me.prefs?.ai_memories as string[]) ?? []
     if (!current.includes(memoryText)) {
-      const updated = [memoryText, ...current].slice(0, 50) // Guarda os 50 aprendizados mais recentes
+      const updated = [memoryText, ...current].slice(0, 50)
       await savePrefs({ ai_memories: updated })
     }
   } catch (e) {
@@ -133,7 +138,25 @@ function extractTime(str: string): { timeStr: string | null; cleanText: string }
 }
 
 /**
- * Parser inteligente de IA com Aprendizado Contínuo (Auto-treinamento) e suporte a moedas reais dos projetos.
+ * Detecta explicitamente a moeda informada pelo usuário no texto ("reais", "dolar", "usd", "brl").
+ */
+function detectInputCurrency(str: string, defaultCurrency = "BRL"): string {
+  const norm = normalize(str)
+  if (norm.includes("dolar") || norm.includes("dolares") || norm.includes("usd") || norm.includes("us$")) {
+    return "USD"
+  }
+  if (norm.includes("real") || norm.includes("reais") || norm.includes("brl") || norm.includes("r$")) {
+    return "BRL"
+  }
+  if (norm.includes("euro") || norm.includes("euros") || norm.includes("eur") || norm.includes("€")) {
+    return "EUR"
+  }
+  return defaultCurrency
+}
+
+/**
+ * Parser inteligente de IA MULTI-INTENÇÃO com suporte completo a conversão de moedas separadas
+ * (ex: projeto recebe em USD, mas gasto/entrada é em BRL).
  */
 export async function processAiCommand(
   prompt: string,
@@ -147,7 +170,7 @@ export async function processAiCommand(
     let text = prompt.trim()
     if (!text) return { reply: "Por favor, digite ou fale o que você deseja realizar." }
 
-    const { projects, categories, memories } = await getAiContextData()
+    const { projects, categories, memories, usdBrlRate } = await getAiContextData()
 
     if (
       (text.includes("Criar Tarefa") || text.includes("Salvar Nota") || text === "criar_tarefa" || text === "salvar_nota") &&
@@ -158,33 +181,32 @@ export async function processAiCommand(
 
     const norm = normalize(text)
 
-    // Se o usuário está treinando explicitamente a IA (ex: "aprenda que X é Y")
+    // Se o usuário está ensinando a IA diretamente
     if (norm.startsWith("aprenda que") || norm.startsWith("lembre que") || norm.startsWith("guarde que")) {
       const memoryFact = text.replace(/^(?:aprenda|lembre|guarde)\s+que\s+/gi, "").trim()
       await recordAiMemory(memoryFact)
       return {
-        reply: `🧠 Aprendizado salvo com sucesso! Guardei na minha memória: "${memoryFact}". Usarei isso em todos os seus próximos comandos.`,
+        reply: `🧠 Aprendizado gravado! Guardei na memória: "${memoryFact}".`,
         actions: [],
         questions: [],
-        availableContext: { projects, categories, memories: [memoryFact, ...memories] }
+        availableContext: { projects, categories, memories: [memoryFact, ...memories], usdBrlRate }
       }
     }
 
-    const isDelete = norm.includes("excluir") || norm.includes("deletar") || norm.includes("remover") || norm.includes("apagar")
-    const isToggle = norm.includes("concluir") || norm.includes("marcar feita") || norm.includes("finalizar") || norm.includes("concluida") || norm.includes("fechar")
-
-    // --- GEMINI API INTELLIGENT ROUTER WITH MEMORY ---
+    // --- GEMINI API INTELLIGENT MULTI-INTENT ROUTER ---
     const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY
 
     if (geminiKey) {
       try {
         const systemPrompt = `Você é o assistente inteligente do SaaS "Dash Tráfego".
-APRENDIZADOS E MEMÓRIAS ANTERIORES DO USUÁRIO: ${JSON.stringify(memories)}.
-Projetos do usuário (com suas moedas nativas): ${JSON.stringify(projects)}.
-Categorias do usuário: ${JSON.stringify(categories)}.
+MEMÓRIAS DO USUÁRIO: ${JSON.stringify(memories)}.
+Projetos do usuário (com suas moedas base de receita): ${JSON.stringify(projects)}.
+Cotação atual USD/BRL: 1 USD = ${usdBrlRate} BRL.
 
-ATENÇÃO À MOEDA DO PROJETO:
-- Quando o usuário mencionar um projeto ou um valor para um projeto que usa USD (ex: USD, US$), mantenha o valor na moeda nativa do projeto sem converter erradamente para BRL!
+IMPORTANTE SOBRE MOEDAS SEPARADAS:
+- Um projeto pode receber vendas em USD, mas gastar em BRL (Reais em Ads).
+- Sempre identifique "input_currency" ("BRL" ou "USD") no payload para gastos ou vendas.
+- Exemplo: "gastei 500 reais em ads no projeto Alpha" -> input_currency = "BRL", spend = 500.
 
 Responda ESTRITAMENTE em JSON:
 {
@@ -193,9 +215,9 @@ Responda ESTRITAMENTE em JSON:
     {
       "id": "act_1",
       "type": "create_todo" | "delete_todo" | "toggle_todo" | "create_note" | "delete_note" | "create_shortcut" | "create_category" | "create_cash_entry" | "create_sale" | "create_daily_metric" | "create_project",
-      "title": "Título limpo da ação",
-      "description": "Explicação detalhada da ação com a moeda correta",
-      "payload": { ...parâmetros... }
+      "title": "Título da ação",
+      "description": "Explicação detalhada da ação com a moeda informada e conversão se necessário",
+      "payload": { "project_id": "...", "input_currency": "BRL" | "USD", ...parâmetros... }
     }
   ]
 }`
@@ -225,16 +247,16 @@ Responda ESTRITAMENTE em JSON:
               })),
               questions: [],
               requiresConfirmation: (parsed.actions || []).length > 0,
-              availableContext: { projects, categories, memories }
+              availableContext: { projects, categories, memories, usdBrlRate }
             }
           }
         }
       } catch (e) {
-        console.warn("Gemini API error, using local multi-intent NLP engine:", e)
+        console.warn("Gemini API error, using local fallback NLP engine:", e)
       }
     }
 
-    // --- ENGINE MULTI-INTENÇÃO LOCAL COM RESPEITO À MOEDA DO PROJETO ---
+    // --- ENGINE MULTI-INTENÇÃO LOCAL ---
     const actions: ProposedAction[] = []
     const clauses = text.split(/(?:\.|\n|;|\b(?:e|tambem|alem disso)\b)/gi).map((c) => c.trim()).filter(Boolean)
     const todayStr = new Date().toISOString().slice(0, 10)
@@ -249,22 +271,33 @@ Responda ESTRITAMENTE em JSON:
       }
       const projId = matchedProjectObj?.id ?? null
       const projCurrency = matchedProjectObj?.currency ?? "BRL"
-      const currSymbol = projCurrency === "USD" ? "US$" : projCurrency === "EUR" ? "€" : "R$"
+
+      const inputCurrency = detectInputCurrency(clause, "BRL")
+      const inputSymbol = currencySymbol(inputCurrency)
+      const projectSymbol = currencySymbol(projCurrency)
+
+      const isDelete = normClause.includes("excluir") || normClause.includes("deletar") || normClause.includes("remover") || normClause.includes("apagar")
+      const isToggle = normClause.includes("concluir") || normClause.includes("marcar feita") || normClause.includes("finalizar") || normClause.includes("concluida")
 
       // 1. MÉTRICAS DIÁRIAS (GASTO ADS)
       if (normClause.includes("metrica") || normClause.includes("impressao") || normClause.includes("impressões") || normClause.includes("cliques") || (normClause.includes("gasto") && normClause.includes("ads"))) {
         const amountMatch = clause.match(/(?:R\$|usd|\$)?\s*(\d+(?:[.,]\d{1,2})?)/i)
-        const amount = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : 0
+        const rawAmount = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : 0
+
+        const convertedInProject = inputToProject(rawAmount, inputCurrency, projCurrency, usdBrlRate)
+        const conversionDesc = inputCurrency !== projCurrency
+          ? ` (${inputSymbol} ${rawAmount.toFixed(2)} ➔ ${projectSymbol} ${convertedInProject.toFixed(2)} no projeto)`
+          : ""
 
         actions.push({
           id: `act_${Date.now()}_metric_${idx}`,
           type: "create_daily_metric",
           title: `Atualizar Métricas Diárias`,
-          description: `Gasto Ads: ${currSymbol} ${amount.toFixed(2)} (${projCurrency}) · Projeto: ${matchedProjectObj?.name || "Geral"}`,
+          description: `Gasto Ads: ${inputSymbol} ${rawAmount.toFixed(2)}${conversionDesc} · Projeto: ${matchedProjectObj?.name || "Geral"}`,
           payload: {
-            spend: amount,
+            spend: rawAmount,
+            input_currency: inputCurrency,
             project_id: projId,
-            currency: projCurrency,
             date: todayStr
           }
         })
@@ -273,20 +306,24 @@ Responda ESTRITAMENTE em JSON:
       // 2. REGISTRAR VENDA
       else if (normClause.includes("venda") || normClause.includes("vendi") || normClause.includes("faturei")) {
         const amountMatch = clause.match(/(?:R\$|usd|\$)?\s*(\d+(?:[.,]\d{1,2})?)/i)
-        const amount = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : 0
+        const rawAmount = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : 0
         const isPix = normClause.includes("pix")
         const isCard = normClause.includes("cartao") || normClause.includes("credito")
+
+        // Se o projeto for em USD e o usuário não disse "reais", assume a moeda do projeto para vendas
+        const saleCurrency = detectInputCurrency(clause, projCurrency)
+        const saleSymbol = currencySymbol(saleCurrency)
 
         actions.push({
           id: `act_${Date.now()}_sale_${idx}`,
           type: "create_sale",
           title: `Registrar Venda (${isPix ? "PIX" : isCard ? "Cartão" : "Geral"})`,
-          description: `Valor Bruto: ${currSymbol} ${amount.toFixed(2)} (${projCurrency}) · Projeto: ${matchedProjectObj?.name || "Geral"}`,
+          description: `Valor Bruto: ${saleSymbol} ${rawAmount.toFixed(2)} · Projeto: ${matchedProjectObj?.name || "Geral"}`,
           payload: {
-            gross_amount: amount,
+            gross_amount: rawAmount,
+            input_currency: saleCurrency,
             payment_method: isCard ? "cartao" : "pix",
-            project_id: projId,
-            currency: projCurrency
+            project_id: projId
           }
         })
       }
@@ -345,16 +382,17 @@ Responda ESTRITAMENTE em JSON:
       else if (normClause.includes("caixa") || normClause.includes("gasto") || normClause.includes("despesa") || normClause.includes("receita") || normClause.includes("paguei")) {
         const isSaida = normClause.includes("gasto") || normClause.includes("despesa") || normClause.includes("saida") || normClause.includes("paguei")
         const amountMatch = clause.match(/(?:R\$|usd|\$)?\s*(\d+(?:[.,]\d{1,2})?)/i)
-        const amount = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : 0
+        const rawAmount = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : 0
 
         actions.push({
           id: `act_${Date.now()}_cash_${idx}`,
           type: "create_cash_entry",
           title: `Lançamento no Caixa (${isSaida ? "Saída" : "Entrada"})`,
-          description: `Valor: ${currSymbol} ${amount.toFixed(2)}`,
+          description: `Valor: ${inputSymbol} ${rawAmount.toFixed(2)}`,
           payload: {
             description: clause,
-            amount,
+            amount: rawAmount,
+            input_currency: inputCurrency,
             type: isSaida ? "saida" : "entrada",
             category: isSaida ? "Despesas" : "Receita",
             project_id: projId
@@ -391,11 +429,11 @@ Responda ESTRITAMENTE em JSON:
     }
 
     return {
-      reply: `Preparei ${actions.length} ação(ões) respeitando as moedas e aprendizados dos seus projetos. Confira abaixo:`,
+      reply: `Preparei ${actions.length} ação(ões) respeitando as moedas de entrada (ex: gasto em BRL x projeto em USD). Confira abaixo:`,
       actions,
       questions: [],
       requiresConfirmation: true,
-      availableContext: { projects, categories, memories }
+      availableContext: { projects, categories, memories, usdBrlRate }
     }
   } catch (err: any) {
     console.error("Critical error in processAiCommand:", err)
@@ -408,7 +446,8 @@ Responda ESTRITAMENTE em JSON:
 }
 
 /**
- * Executa as ações confirmadas e auto-grava aprendizados de uso na memória do usuário.
+ * Executa as ações confirmadas realizando a conversão automática de moedas (ex: input em BRL ➔ projeto em USD)
+ * usando a cotação real do sistema.
  */
 export async function executeAiActions(
   actions: ProposedAction[],
@@ -420,19 +459,12 @@ export async function executeAiActions(
 
     let count = 0
     const supabase = await createClient()
+    const usdBrlRate = await getUsdBrlRate()
 
     for (const act of actions) {
       if (act.confirmed === false) continue
 
       try {
-        // AUTO-APRENDIZADO: Registra memória de uso quando um projeto/categoria é selecionado
-        if (act.payload.project_id && act.payload.category) {
-          const { data: p } = await supabase.from("projects").select("name, currency").eq("id", act.payload.project_id).maybeSingle()
-          if (p?.name) {
-            void recordAiMemory(`Para tarefas de '${act.payload.category}', o usuário prefere o projeto '${p.name}' (Moeda ${p.currency || "BRL"}).`)
-          }
-        }
-
         // 1. TAREFAS
         if (act.type === "create_todo") {
           const fd = new FormData()
@@ -460,13 +492,6 @@ export async function executeAiActions(
           if (idToToggle) {
             await toggleTodo(idToToggle, act.payload.done ?? true)
             count++
-          } else if (act.payload.title) {
-            const { data: todos } = await supabase.from("todo_items").select("id, title").limit(20)
-            const matched = (todos ?? []).find((t) => normalize(t.title).includes(normalize(act.payload.title)))
-            if (matched) {
-              await toggleTodo(matched.id, act.payload.done ?? true)
-              count++
-            }
           }
         }
 
@@ -486,15 +511,22 @@ export async function executeAiActions(
           }
         }
 
-        // 3. VENDAS (Respeitando a moeda)
+        // 3. VENDAS (Com conversão de moeda do valor digitado para a moeda do projeto)
         else if (act.type === "create_sale") {
-          const targetProj = act.payload.project_id || projectId
-          if (targetProj) {
-            const gross = parseFloat(act.payload.gross_amount) || 0
+          const targetProjId = act.payload.project_id || projectId
+          if (targetProjId) {
+            const { data: p } = await supabase.from("projects").select("currency").eq("id", targetProjId).single()
+            const projCurrency = p?.currency || "BRL"
+            const rawGross = parseFloat(act.payload.gross_amount) || 0
+            const inputCurrency = act.payload.input_currency || projCurrency
+
+            // Converte da moeda digitada para a moeda do projeto
+            const finalGross = inputToProject(rawGross, inputCurrency, projCurrency, usdBrlRate)
+
             await supabase.from("sales").insert({
-              project_id: targetProj,
-              gross_amount: gross,
-              net_amount: gross,
+              project_id: targetProjId,
+              gross_amount: finalGross,
+              net_amount: finalGross,
               payment_method: act.payload.payment_method || "pix",
               sold_at: new Date().toISOString().slice(0, 10)
             })
@@ -502,17 +534,24 @@ export async function executeAiActions(
           }
         }
 
-        // 4. MÉTRICAS DIÁRIAS (GASTO ADS NA MOEDA REAL DO PROJETO)
+        // 4. MÉTRICAS DIÁRIAS (CONVERTE GASTO EM BRL/USD PARA A MOEDA BASE DO PROJETO)
         else if (act.type === "create_daily_metric") {
-          const targetProj = act.payload.project_id || projectId
-          if (targetProj) {
+          const targetProjId = act.payload.project_id || projectId
+          if (targetProjId) {
+            const { data: p } = await supabase.from("projects").select("currency").eq("id", targetProjId).single()
+            const projCurrency = p?.currency || "BRL"
+            const rawSpend = parseFloat(act.payload.spend) || 0
+            const inputCurrency = act.payload.input_currency || "BRL" // Ad spend no Brasil é quase sempre BRL
+
+            // Converte da moeda digitada (ex: R$ 500) para a moeda do projeto (ex: US$ 100)
+            const finalSpend = inputToProject(rawSpend, inputCurrency, projCurrency, usdBrlRate)
             const date = act.payload.date || new Date().toISOString().slice(0, 10)
-            const spend = parseFloat(act.payload.spend) || 0
+
             await supabase.from("daily_metrics").upsert(
               {
-                project_id: targetProj,
+                project_id: targetProjId,
                 date,
-                spend
+                spend: finalSpend
               },
               { onConflict: "project_id,date" }
             )
@@ -520,14 +559,25 @@ export async function executeAiActions(
           }
         }
 
-        // 5. CAIXA & OUTROS
+        // 5. CAIXA
         else if (act.type === "create_cash_entry") {
+          const targetProjId = act.payload.project_id || projectId
+          let projCurrency = "BRL"
+          if (targetProjId) {
+            const { data: p } = await supabase.from("projects").select("currency").eq("id", targetProjId).maybeSingle()
+            if (p?.currency) projCurrency = p.currency
+          }
+          const rawAmount = parseFloat(act.payload.amount) || 0
+          const inputCurrency = act.payload.input_currency || projCurrency
+          const finalAmount = inputToProject(rawAmount, inputCurrency, projCurrency, usdBrlRate)
+
           await supabase.from("cash_entries").insert({
             owner_id: me.id,
-            project_id: act.payload.project_id || projectId || null,
+            project_id: targetProjId || null,
             type: act.payload.type || "entrada",
             description: act.payload.description || "Lançamento via IA",
-            amount: parseFloat(act.payload.amount) || 0,
+            amount: finalAmount,
+            currency: projCurrency,
             occurred_at: act.payload.occurred_at || new Date().toISOString().slice(0, 10),
             category: act.payload.category || "Geral"
           })
