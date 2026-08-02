@@ -16,6 +16,8 @@ import {
   Lock,
   Users,
   ListTodo,
+  Trash2,
+  Pencil,
 } from "lucide-react"
 import { Card, Button, Input, Textarea, Select, Field, Badge } from "@/components/ui"
 import { Modal } from "@/components/modal"
@@ -95,6 +97,7 @@ export function OrganizacaoClient({
   const [catModal, setCatModal] = React.useState<{ open: boolean; edit?: ShortcutCategory }>({ open: false })
   const [scModal, setScModal] = React.useState<{ open: boolean; edit?: Shortcut }>({ open: false })
   const [noteModal, setNoteModal] = React.useState<{ open: boolean; edit?: Note }>({ open: false })
+  const [viewNote, setViewNote] = React.useState<Note | null>(null)
 
   const empty = categories.length === 0 && shortcuts.length === 0 && notes.length === 0
 
@@ -107,6 +110,16 @@ export function OrganizacaoClient({
     }
     return map
   }, [shortcuts])
+
+  const notesGrouped = React.useMemo(() => {
+    const map = new Map<string | null, Note[]>()
+    for (const n of notes) {
+      const key = n.category_id
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(n)
+    }
+    return map
+  }, [notes])
 
   return (
     <div className={cn("flex flex-col gap-5", !embedded && "mx-auto max-w-6xl")}>
@@ -139,22 +152,20 @@ export function OrganizacaoClient({
             </TabBtn>
           </div>
         )}
-        {tab !== "tarefas" && (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setCatModal({ open: true })}>
-              <FolderPlus size={15} /> Categoria
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setCatModal({ open: true })}>
+            <FolderPlus size={15} /> Categoria
+          </Button>
+          {tab === "atalhos" ? (
+            <Button size="sm" onClick={() => setScModal({ open: true })}>
+              <Plus size={15} /> Atalho
             </Button>
-            {tab === "atalhos" ? (
-              <Button size="sm" onClick={() => setScModal({ open: true })}>
-                <Plus size={15} /> Atalho
-              </Button>
-            ) : (
-              <Button size="sm" onClick={() => setNoteModal({ open: true })}>
-                <Plus size={15} /> Nota
-              </Button>
-            )}
-          </div>
-        )}
+          ) : tab === "notas" ? (
+            <Button size="sm" onClick={() => setNoteModal({ open: true })}>
+              <Plus size={15} /> Nota
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {tab === "tarefas" ? (
@@ -165,6 +176,7 @@ export function OrganizacaoClient({
           reminders={reminders}
           notifEnabled={notifEnabled}
           projectOptions={projectOptions}
+          categories={categories}
         />
       ) : empty ? (
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
@@ -206,27 +218,63 @@ export function OrganizacaoClient({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {notes.length === 0 ? (
-            <p className="text-sm text-muted">Nenhuma nota ainda.</p>
-          ) : (
-            notes.map((n) => {
-              const mine = !meId || n.owner_id === meId
-              // Em projeto, qualquer membro pode editar/excluir (RLS garante o acesso).
-              const canManage = mine || projectId !== null
-              return (
-                <NoteCard
-                  key={n.id}
-                  note={n}
-                  category={categories.find((c) => c.id === n.category_id) ?? null}
-                  friends={friends}
-                  mine={mine}
-                  onEdit={canManage ? () => setNoteModal({ open: true, edit: n }) : undefined}
-                  onDelete={canManage ? () => deleteNote(n.id) : undefined}
-                />
-              )
-            })
+        <div className="flex flex-col gap-5">
+          {categories.map((cat) => {
+            const catNotes = notesGrouped.get(cat.id) ?? []
+            if (catNotes.length === 0) return null
+            return (
+              <Card key={cat.id} className="p-5">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: cat.color ?? "var(--color-muted)" }} aria-hidden />
+                    <h2 className="font-display text-base font-semibold text-foreground">{cat.name}</h2>
+                    <Badge tone="default">{catNotes.length}</Badge>
+                  </div>
+                  <RowActions onEdit={() => setCatModal({ open: true, edit: cat })} onDelete={() => deleteCategory(cat.id)} />
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {catNotes.map((n) => {
+                    const mine = !meId || n.owner_id === meId
+                    return (
+                      <NoteCard
+                        key={n.id}
+                        note={n}
+                        category={cat}
+                        friends={friends}
+                        mine={mine}
+                        onClick={() => setViewNote(n)}
+                      />
+                    )
+                  })}
+                </div>
+              </Card>
+            )
+          })}
+          {(notesGrouped.get(null)?.length ?? 0) > 0 && (
+            <Card className="p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: "var(--color-muted)" }} aria-hidden />
+                <h2 className="font-display text-base font-semibold text-foreground">Sem categoria</h2>
+                <Badge tone="default">{notesGrouped.get(null)!.length}</Badge>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {notesGrouped.get(null)!.map((n) => {
+                  const mine = !meId || n.owner_id === meId
+                  return (
+                    <NoteCard
+                      key={n.id}
+                      note={n}
+                      category={null}
+                      friends={friends}
+                      mine={mine}
+                      onClick={() => setViewNote(n)}
+                    />
+                  )
+                })}
+              </div>
+            </Card>
           )}
+          {notes.length === 0 && <p className="text-sm text-muted">Nenhuma nota ainda.</p>}
         </div>
       )}
 
@@ -248,6 +296,15 @@ export function OrganizacaoClient({
         categories={categories}
         friends={friends}
         projectOptions={projectOptions}
+      />
+      <NoteViewModal
+        note={viewNote}
+        category={viewNote ? categories.find((c) => c.id === viewNote.category_id) ?? null : null}
+        friends={friends}
+        mine={viewNote ? (!meId || viewNote.owner_id === meId) : true}
+        onClose={() => setViewNote(null)}
+        onEdit={viewNote ? () => setNoteModal({ open: true, edit: viewNote }) : undefined}
+        onDelete={viewNote ? () => deleteNote(viewNote.id) : undefined}
       />
     </div>
   )
@@ -378,15 +435,13 @@ function NoteCard({
   category,
   friends = [],
   mine = true,
-  onEdit,
-  onDelete,
+  onClick,
 }: {
   note: Note
   category: ShortcutCategory | null
   friends?: FriendOption[]
   mine?: boolean
-  onEdit?: () => void
-  onDelete?: () => Promise<{ ok?: boolean; error?: string }>
+  onClick?: () => void
 }) {
   // Detecta a primeira URL de mídia no corpo da nota para pré-visualizar.
   const mediaUrl = React.useMemo(() => {
@@ -410,10 +465,16 @@ function NoteCard({
   })()
 
   return (
-    <Card className={cn("flex flex-col gap-2 p-4", !mine && "border-primary/25 bg-primary/[0.03]")}>
+    <Card
+      role="button"
+      onClick={onClick}
+      className={cn(
+        "flex flex-col gap-2 p-4 cursor-pointer hover:border-primary/40 transition-colors",
+        !mine && "border-primary/25 bg-primary/[0.03]"
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-display text-sm font-semibold text-foreground">{note.title}</h3>
-        {mine ? <RowActions onEdit={onEdit} onDelete={onDelete} /> : null}
       </div>
       {note.body ? (
         <p className="line-clamp-5 whitespace-pre-wrap text-sm text-muted">{note.body}</p>
@@ -441,6 +502,103 @@ function NoteCard({
         )}
       </div>
     </Card>
+  )
+}
+
+function NoteViewModal({
+  note,
+  category,
+  friends = [],
+  mine = true,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  note: Note | null
+  category: ShortcutCategory | null
+  friends?: FriendOption[]
+  mine?: boolean
+  onClose: () => void
+  onEdit?: () => void
+  onDelete?: () => Promise<{ ok?: boolean; error?: string }>
+}) {
+  const [pending, startTransition] = React.useTransition()
+  if (!note) return null
+
+  const mediaUrl = (note.body ?? "").match(/https?:\/\/[^\s]+/g)?.find((u) => detectMedia(u) !== "link") ?? null
+
+  const sharedCount = note.shared_with?.length ?? 0
+  const nameOf = (id: string) => friends.find((f) => f.id === id)?.name
+  const shareLabel = (() => {
+    if (!mine && note.shared_from) return `De ${note.shared_from.name}`
+    if (mine && sharedCount > 0) {
+      if (sharedCount === 1) return `Com ${nameOf(note.shared_with![0]) ?? "1 amigo"}`
+      return `Com ${sharedCount} amigos`
+    }
+    return null
+  })()
+
+  const handleDelete = () => {
+    if (!onDelete) return
+    startTransition(async () => {
+      await onDelete()
+      onClose()
+    })
+  }
+
+  return (
+    <Modal open onClose={onClose} title={note.title}>
+      <div className="flex flex-col gap-4">
+        {/* Badges */}
+        <div className="flex flex-wrap items-center gap-2">
+          {category && (
+            <Badge tone="default">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: category.color ?? "var(--color-muted)" }} />
+              {category.name}
+            </Badge>
+          )}
+          {shareLabel ? (
+            <Badge tone="primary">
+              <Users size={11} />
+              {shareLabel}
+            </Badge>
+          ) : (
+            <Badge tone="default">
+              <Lock size={11} />
+              Privada
+            </Badge>
+          )}
+        </div>
+
+        {/* Body */}
+        {note.body ? (
+          <p className="whitespace-pre-wrap text-sm text-muted">{note.body}</p>
+        ) : (
+          <p className="text-sm text-muted/60">Sem conteúdo.</p>
+        )}
+
+        {/* Media preview */}
+        {mediaUrl && <MediaPreview url={mediaUrl} title={note.title} />}
+
+        {/* Actions */}
+        {mine && (
+          <div className="flex justify-end gap-2 border-t border-[color:var(--color-border)] pt-3">
+            {onDelete && (
+              <Button variant="ghost" size="sm" onClick={handleDelete} disabled={pending} className="text-negative hover:bg-negative/10">
+                <Trash2 size={15} />
+                {pending ? "Excluindo..." : "Excluir"}
+              </Button>
+            )}
+            {onEdit && (
+              <Button size="sm" onClick={() => { onEdit(); onClose() }}>
+                <Pencil size={15} />
+                Editar
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 

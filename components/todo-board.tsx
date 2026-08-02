@@ -7,7 +7,6 @@ import {
   EyeOff,
   User,
   Check,
-  Folder,
   CalendarDays,
   Clock,
   ChevronDown,
@@ -17,7 +16,7 @@ import { Card, Button, Input, Select, Field, Badge } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { RowActions } from "@/components/row-actions"
 import { cn } from "@/lib/utils"
-import type { TodoItem, Profile } from "@/lib/types"
+import type { TodoItem, Profile, ShortcutCategory } from "@/lib/types"
 import { createTodo, updateTodo, toggleTodo, archiveTodo, deleteTodo } from "@/app/actions/todo"
 import { scheduleReminders, type ScheduledReminder } from "@/lib/pwa"
 
@@ -87,6 +86,7 @@ export function TodoBoard({
   reminders = {},
   notifEnabled = true,
   projectOptions = [],
+  categories = [],
 }: {
   projectId: string | null
   todos: TodoItem[]
@@ -97,6 +97,8 @@ export function TodoBoard({
   notifEnabled?: boolean
   /** Projetos aos quais a tarefa pode ser atribuída (páginas globais). */
   projectOptions?: { id: string; name: string }[]
+  /** Categorias disponíveis (compartilhadas com atalhos e notas). */
+  categories?: ShortcutCategory[]
 }) {
   const [pending, startTransition] = React.useTransition()
 
@@ -173,7 +175,7 @@ export function TodoBoard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Select value={areaFilter} onChange={(e) => setAreaFilter(e.target.value)} className="h-9 w-auto">
-            <option value="todas">Todas as áreas</option>
+            <option value="todas">Todas as categorias</option>
             {areas.map((a) => (
               <option key={a} value={a}>
                 {a}
@@ -206,28 +208,35 @@ export function TodoBoard({
         <Card className="p-8 text-center text-sm text-muted">Nenhuma tarefa com esses filtros.</Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {grouped.map(([area, items]) => (
-            <Card key={area} className="flex flex-col gap-2 p-4">
-              <div className="mb-1 flex items-center gap-2">
-                <Folder size={16} className="text-primary" />
-                <h3 className="font-display text-sm font-semibold text-foreground">{area}</h3>
-                <Badge tone="default">{items.length}</Badge>
-              </div>
-              {items.map((t) => (
-                <TodoRow
-                  key={t.id}
-                  item={t}
-                  reminder={reminders[t.id]}
-                  assignee={projectId ? memberName(t.assignee_id) : null}
-                  onToggle={() => runToggle(t)}
-                  onArchive={() => runArchive(t, true)}
-                  onEdit={() => setModal({ open: true, edit: t })}
-                  onDelete={() => deleteTodo(t.id)}
-                  pending={pending}
-                />
-              ))}
-            </Card>
-          ))}
+          {grouped.map(([area, items]) => {
+            const matchedCat = categories.find((c) => c.name === area)
+            return (
+              <Card key={area} className="flex flex-col gap-2 p-4">
+                <div className="mb-1 flex items-center gap-2">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: matchedCat?.color ?? "var(--color-primary)" }}
+                    aria-hidden
+                  />
+                  <h3 className="font-display text-sm font-semibold text-foreground">{area}</h3>
+                  <Badge tone="default">{items.length}</Badge>
+                </div>
+                {items.map((t) => (
+                  <TodoRow
+                    key={t.id}
+                    item={t}
+                    reminder={reminders[t.id]}
+                    assignee={projectId ? memberName(t.assignee_id) : null}
+                    onToggle={() => runToggle(t)}
+                    onArchive={() => runArchive(t, true)}
+                    onEdit={() => setModal({ open: true, edit: t })}
+                    onDelete={() => deleteTodo(t.id)}
+                    pending={pending}
+                  />
+                ))}
+              </Card>
+            )
+          })}
         </div>
       )}
 
@@ -248,6 +257,7 @@ export function TodoBoard({
         projectId={projectId}
         members={members}
         areas={areas}
+        categories={categories}
         reminder={modal.edit ? reminders[modal.edit.id] : undefined}
         projectOptions={projectOptions}
       />
@@ -398,6 +408,7 @@ function TodoModal({
   projectId,
   members,
   areas,
+  categories = [],
   reminder,
   projectOptions = [],
 }: {
@@ -406,6 +417,7 @@ function TodoModal({
   projectId: string | null
   members: Profile[]
   areas: string[]
+  categories?: ShortcutCategory[]
   reminder?: { time?: string; lead?: number }
   projectOptions?: { id: string; name: string }[]
 }) {
@@ -483,19 +495,19 @@ function TodoModal({
           </Field>
         )}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Área" hint="Ex.: Pessoal, Casa, Mercado. Vazio = Outros.">
-            <Input
+          <Field label="Categoria" hint="Selecione a categoria da tarefa.">
+            <Select
               name="category"
               value={area}
               onChange={(e) => setArea(e.target.value)}
-              placeholder="Outros"
-              list="todo-areas"
-            />
-            <datalist id="todo-areas">
-              {areas.map((a) => (
-                <option key={a} value={a} />
+            >
+              <option value="">Outros</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
               ))}
-            </datalist>
+            </Select>
           </Field>
           <Field label="Prazo (opcional)">
             <Input name="due_date" type="date" defaultValue={edit?.due_date ?? ""} />
