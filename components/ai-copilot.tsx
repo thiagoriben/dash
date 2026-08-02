@@ -388,6 +388,49 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
                             </div>
                           )}
 
+                          {/* REGISTRAR VENDA */}
+                          {act.type === "create_sale" && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="flex items-center gap-1 text-[10px] text-muted">
+                                  <DollarSign size={10} /> Valor Bruto (R$):
+                                </label>
+                                <Input
+                                  type="number"
+                                  value={act.payload.gross_amount || 0}
+                                  onChange={(e) => updateActionPayload(m.id, act.id, "gross_amount", parseFloat(e.target.value) || 0)}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-muted">Pagamento:</label>
+                                <Select
+                                  value={act.payload.payment_method || "pix"}
+                                  onChange={(e) => updateActionPayload(m.id, act.id, "payment_method", e.target.value)}
+                                  className="h-8 text-xs"
+                                >
+                                  <option value="pix">PIX</option>
+                                  <option value="cartao">Cartão de Crédito</option>
+                                </Select>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* MÉTRICAS DIÁRIAS (GASTO ADS) */}
+                          {act.type === "create_daily_metric" && (
+                            <div className="flex flex-col gap-1">
+                              <label className="flex items-center gap-1 text-[10px] text-muted">
+                                <DollarSign size={10} /> Gasto com Ads (R$):
+                              </label>
+                              <Input
+                                type="number"
+                                value={act.payload.spend || 0}
+                                onChange={(e) => updateActionPayload(m.id, act.id, "spend", parseFloat(e.target.value) || 0)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                          )}
+
                           {/* PRAZO / DATA */}
                           {act.type === "create_todo" && (
                             <div className="flex flex-col gap-1">
