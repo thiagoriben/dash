@@ -1,13 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { Sparkles, Mic, MicOff, Send, X, Check, Loader2, Edit2, AlertCircle, HelpCircle, ChevronRight } from "lucide-react"
-import { Button, Input, Card, Badge } from "@/components/ui"
+import { Sparkles, Mic, MicOff, Send, Trash2, Check, Loader2, Edit3, AlertCircle, HelpCircle, Folder, Tag, Calendar, DollarSign, Plus } from "lucide-react"
+import { Button, Input, Card, Badge, Select } from "@/components/ui"
 import { Modal } from "@/components/modal"
 import { cn } from "@/lib/utils"
 import {
   processAiCommand,
   executeAiActions,
+  getAiContextData,
   type ProposedAction,
   type ClarifyingQuestion,
   type AiProcessResult
@@ -28,11 +29,17 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
   const [prompt, setPrompt] = React.useState("")
   const [listening, setListening] = React.useState(false)
   const [pending, startTransition] = React.useTransition()
+
+  const [contextData, setContextData] = React.useState<{
+    projects: { id: string; name: string }[]
+    categories: { id: string; name: string }[]
+  }>({ projects: [], categories: [] })
+
   const [messages, setMessages] = React.useState<Message[]>([
     {
       id: "welcome",
       sender: "ai",
-      text: "Olá! Sou seu assistente de IA do Dash. Digite ou fale o que você deseja criar (tarefas, notas, atalhos, lançamentos no caixa, projetos) ou consulte suas informações!",
+      text: "Olá! Sou o assistente do Dash. Diga ou digite o que você precisa (ex: 'Criar tarefa de subir ads', 'Excluir nota de teste', 'Lançar 500 no caixa') que cuidarei de tudo para você!",
       timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     }
   ])
@@ -40,7 +47,14 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
   const [recognition, setRecognition] = React.useState<any>(null)
   const chatBottomRef = React.useRef<HTMLDivElement>(null)
 
-  // Atalho de teclado Ctrl + K ou Cmd + K para abrir o assistente
+  // Carrega projetos e categorias do usuário ao abrir o modal
+  React.useEffect(() => {
+    if (open) {
+      getAiContextData().then(setContextData)
+    }
+  }, [open])
+
+  // Atalho de teclado Ctrl + K ou Cmd + K
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -52,7 +66,7 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
-  // Inicializa a Web Speech API para Transcrição de Voz nativa e gratuita
+  // Web Speech API para Transcrição de Voz
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -86,7 +100,6 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
     }
   }, [])
 
-  // Auto scroll para o final da conversa
   React.useEffect(() => {
     if (open) {
       chatBottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -131,7 +144,17 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
     setPrompt("")
 
     startTransition(async () => {
-      const res: AiProcessResult = await processAiCommand(query, { projectId })
+      // Se já existirem ações pendentes na última mensagem, atualizamos o contexto
+      const lastAiMsg = [...messages].reverse().find((m) => m.sender === "ai" && m.actions && m.actions.length > 0)
+      const res: AiProcessResult = await processAiCommand(query, {
+        projectId,
+        previousActions: lastAiMsg?.actions
+      })
+
+      if (res.availableContext) {
+        setContextData(res.availableContext)
+      }
+
       const aiMsg: Message = {
         id: `ai_${Date.now()}`,
         sender: "ai",
@@ -179,23 +202,34 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
     )
   }
 
+  const removeAction = (msgId: string, actionId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== msgId || !m.actions) return m
+        const newActions = m.actions.filter((act) => act.id !== actionId)
+        return {
+          ...m,
+          actions: newActions,
+          requiresConfirmation: newActions.length > 0
+        }
+      })
+    )
+  }
+
   return (
     <>
-      {/* Botão Flutuante (Trigger Copilot) no canto inferior direito */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Abrir Assistente de IA (Ctrl+K)"
-        title="Abrir Assistente de IA (Ctrl+K)"
-        className="fixed bottom-5 right-5 z-40 flex h-13 w-13 items-center justify-center rounded-full bg-primary text-[#04121a] shadow-lg shadow-primary/20 transition-all hover:scale-105 hover:bg-primary/90 focus:outline-none"
+        aria-label="Abrir Assistente Dash (Ctrl+K)"
+        title="Abrir Assistente Dash (Ctrl+K)"
+        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 flex h-13 w-13 items-center justify-center rounded-full bg-primary text-[#04140b] shadow-lg shadow-primary/25 transition-all hover:scale-105 hover:bg-primary/90 focus:outline-none"
       >
         <Sparkles size={24} className="animate-pulse" />
       </button>
 
-      {/* Modal / Panel do Assistente */}
-      <Modal open={open} onClose={() => setOpen(false)} title="✨ Dash Copilot (IA por Voz/Texto)">
+      <Modal open={open} onClose={() => setOpen(false)} title="✨ Assistente Dash (IA por Voz/Texto)">
         <div className="flex flex-col gap-4">
-          {/* Timeline de Mensagens */}
           <div className="flex max-h-[60vh] min-h-[300px] flex-col gap-3 overflow-y-auto rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)]/40 p-3">
             {messages.map((m) => (
               <div
@@ -216,7 +250,7 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
                 </div>
                 <p className="whitespace-pre-wrap">{m.text}</p>
 
-                {/* Opções de Esclarecimento (Chips clicáveis) */}
+                {/* Opções Interativas de Esclarecimento (Chips clicáveis) */}
                 {m.questions && m.questions.length > 0 && (
                   <div className="mt-2 flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2.5">
                     {m.questions.map((q, idx) => (
@@ -230,7 +264,7 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
                               key={oIdx}
                               type="button"
                               onClick={() => handleSend(opt.label)}
-                              className="rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary hover:text-[#04121a]"
+                              className="rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary hover:text-[#04140b]"
                             >
                               {opt.label}
                             </button>
@@ -241,59 +275,136 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
                   </div>
                 )}
 
-                {/* Card de Confirmação de Ações Propostas */}
+                {/* Card de Confirmação & Edição 100% Personalizável */}
                 {m.actions && m.actions.length > 0 && (
                   <div className="mt-2 flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
-                    <span className="flex items-center gap-1 text-xs font-semibold text-primary">
-                      <AlertCircle size={14} /> Confirmação de Ações ({m.actions.length}):
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1 text-xs font-semibold text-primary">
+                        <AlertCircle size={14} /> Confirmação & Ajustes de Ações ({m.actions.length}):
+                      </span>
+                      <span className="text-[10px] text-muted">Edite os campos abaixo antes de executar</span>
+                    </div>
 
-                    {m.actions.map((act) => (
-                      <Card key={act.id} className="flex flex-col gap-2 p-2.5 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-foreground">{act.title}</span>
-                          <Badge tone="primary">{act.type.replace("create_", "")}</Badge>
-                        </div>
-                        <p className="text-muted">{act.description}</p>
+                    {m.actions.map((act) => {
+                      const isDelete = act.type.startsWith("delete_")
+                      const isToggle = act.type.startsWith("toggle_")
+                      return (
+                        <Card key={act.id} className="flex flex-col gap-2.5 p-3 text-xs">
+                          <div className="flex items-center justify-between gap-2 border-b border-[color:var(--color-border)] pb-2">
+                            <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                              {isDelete ? <Trash2 size={13} className="text-negative" /> : isToggle ? <Check size={13} className="text-positive" /> : <Plus size={13} className="text-primary" />}
+                              <span>{act.title}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Badge tone={isDelete ? "negative" : isToggle ? "positive" : "primary"}>
+                                {act.type.replace("create_", "").replace("delete_", "excluir_").replace("toggle_", "concluir_")}
+                              </Badge>
+                              <button
+                                type="button"
+                                onClick={() => removeAction(m.id, act.id)}
+                                title="Remover esta ação"
+                                className="rounded p-1 text-muted hover:bg-negative/20 hover:text-negative"
+                              >
+                                <X size={13} />
+                              </button>
+                            </div>
+                          </div>
 
-                        {/* Campos Editáveis antes da Confirmação */}
-                        {act.type === "create_todo" && (
-                          <div className="mt-1 flex flex-col gap-1">
-                            <label className="text-[10px] text-muted">Título da Tarefa:</label>
+                          {/* CAMPO DE TÍTULO / DESCRIÇÃO */}
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-muted">Título / Nome:</label>
                             <Input
-                              value={act.payload.title || ""}
-                              onChange={(e) => updateActionPayload(m.id, act.id, "title", e.target.value)}
-                              className="h-7 text-xs"
+                              value={act.payload.title || act.payload.name || act.payload.description || ""}
+                              onChange={(e) => {
+                                updateActionPayload(m.id, act.id, "title", e.target.value)
+                                updateActionPayload(m.id, act.id, "name", e.target.value)
+                                updateActionPayload(m.id, act.id, "description", e.target.value)
+                              }}
+                              className="h-8 text-xs"
                             />
                           </div>
-                        )}
 
-                        {act.type === "create_cash_entry" && (
-                          <div className="mt-1 grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[10px] text-muted">Valor (R$):</label>
+                          {/* VINCULAR PROJETO */}
+                          {contextData.projects.length > 0 && !isDelete && (
+                            <div className="flex flex-col gap-1">
+                              <label className="flex items-center gap-1 text-[10px] text-muted">
+                                <Folder size={10} /> Projeto:
+                              </label>
+                              <Select
+                                value={act.payload.project_id || ""}
+                                onChange={(e) => updateActionPayload(m.id, act.id, "project_id", e.target.value || null)}
+                                className="h-8 text-xs"
+                              >
+                                <option value="">👤 Pessoal (Sem projeto)</option>
+                                {contextData.projects.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    📁 {p.name}
+                                  </option>
+                                ))}
+                              </Select>
+                            </div>
+                          )}
+
+                          {/* VINCULAR CATEGORIA */}
+                          {!isDelete && (act.type === "create_todo" || act.type === "create_note" || act.type === "create_shortcut") && (
+                            <div className="flex flex-col gap-1">
+                              <label className="flex items-center gap-1 text-[10px] text-muted">
+                                <Tag size={10} /> Categoria:
+                              </label>
                               <Input
-                                type="number"
-                                value={act.payload.amount || 0}
-                                onChange={(e) => updateActionPayload(m.id, act.id, "amount", parseFloat(e.target.value) || 0)}
-                                className="h-7 text-xs"
+                                value={act.payload.category || ""}
+                                onChange={(e) => updateActionPayload(m.id, act.id, "category", e.target.value)}
+                                placeholder="Ex.: Tráfego, Pessoal..."
+                                className="h-8 text-xs"
                               />
                             </div>
-                            <div>
-                              <label className="text-[10px] text-muted">Tipo:</label>
-                              <select
-                                value={act.payload.type || "saida"}
-                                onChange={(e) => updateActionPayload(m.id, act.id, "type", e.target.value)}
-                                className="h-7 w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] px-2 text-xs"
-                              >
-                                <option value="entrada">Entrada</option>
-                                <option value="saida">Saída</option>
-                              </select>
+                          )}
+
+                          {/* VALOR E TIPO FINANCEIRO (CAIXA) */}
+                          {act.type === "create_cash_entry" && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="flex items-center gap-1 text-[10px] text-muted">
+                                  <DollarSign size={10} /> Valor (R$):
+                                </label>
+                                <Input
+                                  type="number"
+                                  value={act.payload.amount || 0}
+                                  onChange={(e) => updateActionPayload(m.id, act.id, "amount", parseFloat(e.target.value) || 0)}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-muted">Tipo:</label>
+                                <Select
+                                  value={act.payload.type || "saida"}
+                                  onChange={(e) => updateActionPayload(m.id, act.id, "type", e.target.value)}
+                                  className="h-8 text-xs"
+                                >
+                                  <option value="saida">Saída (Despesa)</option>
+                                  <option value="entrada">Entrada (Receita)</option>
+                                </Select>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </Card>
-                    ))}
+                          )}
+
+                          {/* PRAZO / DATA */}
+                          {act.type === "create_todo" && (
+                            <div className="flex flex-col gap-1">
+                              <label className="flex items-center gap-1 text-[10px] text-muted">
+                                <Calendar size={10} /> Prazo:
+                              </label>
+                              <Input
+                                type="date"
+                                value={act.payload.due_date || ""}
+                                onChange={(e) => updateActionPayload(m.id, act.id, "due_date", e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                          )}
+                        </Card>
+                      )
+                    })}
 
                     {m.requiresConfirmation && (
                       <Button
@@ -334,7 +445,6 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
             }}
             className="flex items-center gap-2"
           >
-            {/* Botão de Transcrição de Voz NATIVO */}
             <Button
               type="button"
               variant={listening ? "negative" : "outline"}
@@ -348,7 +458,7 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
             <Input
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder={listening ? "Ouvindo... Fale agora..." : "Digite ou fale o que quer criar (ex: 'Criar tarefa de subir ads')..."}
+              placeholder={listening ? "Ouvindo... Fale agora..." : "Digite ou fale (ex: 'Excluir nota de teste' ou 'Lançar 500 no caixa')..."}
               className="flex-1"
               autoFocus
             />
@@ -359,7 +469,7 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
           </form>
 
           <p className="text-[11px] text-muted text-center">
-            Dica: Pressione <kbd className="rounded bg-white/10 px-1 py-0.5 text-[10px]">Ctrl + K</kbd> em qualquer tela para abrir este assistente.
+            Pressione <kbd className="rounded bg-white/10 px-1 py-0.5 text-[10px]">Ctrl + K</kbd> para abrir/fechar o assistente.
           </p>
         </div>
       </Modal>
