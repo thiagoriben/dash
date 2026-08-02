@@ -81,8 +81,8 @@ export function TabOverview({
   const router = useRouter()
 
   // ---- Filtro de período ----
-  type RangePreset = "7d" | "30d" | "mes" | "tudo" | "custom"
-  const [rangePreset, setRangePreset] = useState<RangePreset>("tudo")
+  type RangePreset = "hoje" | "ontem" | "15d" | "7d" | "30d" | "mes" | "tudo" | "custom"
+  const [rangePreset, setRangePreset] = useState<RangePreset>("hoje")
   const todayStr = new Date().toISOString().slice(0, 10)
   const [customFrom, setCustomFrom] = useState("")
   const [customTo, setCustomTo] = useState(todayStr)
@@ -92,9 +92,16 @@ export function TabOverview({
     const to = rangePreset === "custom" ? customTo || todayStr : todayStr
     if (rangePreset === "tudo") return { from: "", to: "" }
     if (rangePreset === "custom") return { from: customFrom, to }
+    if (rangePreset === "hoje") return { from: todayStr, to: todayStr }
+    if (rangePreset === "ontem") {
+      const y = new Date(todayStr + "T00:00:00")
+      y.setDate(y.getDate() - 1)
+      const yStr = y.toISOString().slice(0, 10)
+      return { from: yStr, to: yStr }
+    }
     const d = new Date(to + "T00:00:00")
     if (rangePreset === "mes") d.setDate(1)
-    else d.setDate(d.getDate() - (rangePreset === "7d" ? 6 : 29))
+    else d.setDate(d.getDate() - (rangePreset === "15d" ? 14 : rangePreset === "7d" ? 6 : 29))
     return { from: d.toISOString().slice(0, 10), to }
   }, [rangePreset, customFrom, customTo, todayStr])
 
@@ -200,6 +207,9 @@ export function TabOverview({
             onChange={(e) => setRangePreset(e.target.value as RangePreset)}
             className="h-9 w-auto text-sm"
           >
+            <option value="hoje">Hoje</option>
+            <option value="ontem">Ontem</option>
+            <option value="15d">Últimos 15 dias</option>
             <option value="tudo">Todo o período</option>
             <option value="7d">Últimos 7 dias</option>
             <option value="30d">Últimos 30 dias</option>
