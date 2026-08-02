@@ -1,5 +1,5 @@
 import webpush from "web-push"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 
 const VAPID_PUBLIC_KEY =
   process.env.VAPID_PUBLIC_KEY ||
@@ -18,12 +18,13 @@ webpush.setVapidDetails(
 
 /**
  * Envia uma notificação Web Push VAPID em segundo plano para todos os dispositivos inscritos do usuário.
+ * Usa createAdminClient para ignorar RLS do Supabase no ambiente de servidor/cron.
  */
 export async function sendWebPushNotification(
   userId: string,
   payloadData: { title: string; body: string; url?: string; tag?: string }
 ) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const { data } = await supabase.from("profiles").select("prefs").eq("id", userId).maybeSingle()
 
   const prefs = (data?.prefs ?? {}) as Record<string, unknown>

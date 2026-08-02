@@ -481,18 +481,31 @@ export function AiCopilot({ projectId }: { projectId?: string | null }) {
                             </div>
                           )}
 
-                          {/* PRAZO / DATA */}
+                          {/* PRAZO / DATA & HORÁRIO */}
                           {act.type === "create_todo" && (
-                            <div className="flex flex-col gap-1">
-                              <label className="flex items-center gap-1 text-[10px] text-muted">
-                                <Calendar size={10} /> Prazo:
-                              </label>
-                              <Input
-                                type="date"
-                                value={act.payload.due_date || ""}
-                                onChange={(e) => updateActionPayload(m.id, act.id, "due_date", e.target.value)}
-                                className="h-8 text-xs"
-                              />
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="flex items-center gap-1 text-[10px] text-muted">
+                                  <Calendar size={10} /> Data:
+                                </label>
+                                <Input
+                                  type="date"
+                                  value={act.payload.due_date || ""}
+                                  onChange={(e) => updateActionPayload(m.id, act.id, "due_date", e.target.value)}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="flex items-center gap-1 text-[10px] text-muted">
+                                  <Clock size={10} /> Horário Lembrete:
+                                </label>
+                                <Input
+                                  type="time"
+                                  value={act.payload.time || ""}
+                                  onChange={(e) => updateActionPayload(m.id, act.id, "time", e.target.value)}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
                             </div>
                           )}
                         </Card>

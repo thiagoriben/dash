@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 import { sendWebPushNotification } from "@/lib/push-server"
 
 export const dynamic = "force-dynamic"
@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic"
 /**
  * Endpoint de Cron / Agendador para verificar tarefas com horário de lembrete
  * e disparar notificações Web Push VAPID direto para os celulares dos usuários.
+ * Usa createAdminClient para ler perfis e tarefas ignorando RLS do Supabase.
  */
 export async function GET(request: Request) {
   try {
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     // 1. Busca todos os perfis com preferências de tarefas (task_reminders)
     const { data: profiles } = await supabase

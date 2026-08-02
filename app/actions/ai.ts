@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, createAdminClient } from "@/lib/supabase/server"
 import { getCurrentProfile, savePrefs } from "@/lib/data"
 import { createTodo, updateTodo, toggleTodo, deleteTodo } from "@/app/actions/todo"
 import { createNote, updateNote, deleteNote, createShortcut, deleteShortcut, createCategory, deleteCategory } from "@/app/actions/organizacao"
@@ -120,21 +120,49 @@ export async function recordAiMemory(memoryText: string) {
 }
 
 /**
- * Extrai horários formatados (ex: "2h00", "15:30", "14h") em HH:MM.
+ * Extrai limpo o título da tarefa, horário (HH:MM) e data a partir do texto em português.
  */
-function extractTime(str: string): { timeStr: string | null; cleanText: string } {
-  let cleanText = str
-  let timeStr: string | null = null
+function cleanTaskPrompt(clause: string): { title: string; timeStr: string | null; dueDate: string } {
+  let text = clause.trim()
+  const today = new Date()
 
-  const timeRegex = /\b([01]?\d|2[0-3])(?:[:hH]([0-5]\d)?)\b/g
-  const match = timeRegex.exec(str)
-  if (match) {
-    const hh = match[1].padStart(2, "0")
-    const mm = match[2] ? match[2].padStart(2, "0") : "00"
+  // 1. Extração de Horário
+  let timeStr: string | null = null
+  const timeMatch = text.match(/(?:às|as|para as|na|no)?\s*([01]?\d|2[0-3])(?::([0-5]\d)|h([0-5]\d)?| horas?)/i)
+  if (timeMatch) {
+    const hh = timeMatch[1].padStart(2, "0")
+    const mm = timeMatch[2] || timeMatch[3] || "00"
     timeStr = `${hh}:${mm}`
-    cleanText = cleanText.replace(match[0], "").trim()
+    text = text.replace(timeMatch[0], "").trim()
   }
-  return { timeStr, cleanText }
+
+  // 2. Extração de Data
+  let dueDate = today.toISOString().slice(0, 10)
+  const norm = normalize(text)
+  if (norm.includes("amanha")) {
+    const tmr = new Date(today)
+    tmr.setDate(tmr.getDate() + 1)
+    dueDate = tmr.toISOString().slice(0, 10)
+    text = text.replace(/\bamanh[aã]\b/gi, "").trim()
+  } else if (norm.includes("hoje")) {
+    text = text.replace(/\bhoje\b/gi, "").trim()
+  }
+
+  // 3. Limpeza de prefixos de comandos e conectivos de tempo
+  let cleanTitle = text
+    .replace(/^(?:me\s+)?lembr[aeiou](?:-me)?\s+(?:de|pra|que)?\s*/gi, "")
+    .replace(/^(?:criar|nova|adicionar|agendar)\s+tarefa\s+(?:de|pra)?\s*/gi, "")
+    .replace(/^(?:preciso|tenho que|devo)\s+/gi, "")
+    .replace(/(?:\s+às|\s+as|\s+para as|\s+horas)\s*$/gi, "")
+    .trim()
+
+  if (cleanTitle) {
+    cleanTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1)
+  } else {
+    cleanTitle = clause
+  }
+
+  return { title: cleanTitle, timeStr, dueDate }
 }
 
 /**
@@ -155,8 +183,7 @@ function detectInputCurrency(str: string, defaultCurrency = "BRL"): string {
 }
 
 /**
- * Parser inteligente de IA MULTI-INTENÇÃO com suporte completo a conversão de moedas separadas
- * (ex: projeto recebe em USD, mas gasto/entrada é em BRL).
+ * Parser inteligente de IA MULTI-INTENÇÃO de alta precisão.
  */
 export async function processAiCommand(
   prompt: string,
@@ -198,15 +225,20 @@ export async function processAiCommand(
 
     if (geminiKey) {
       try {
-        const systemPrompt = `Você é o assistente inteligente do SaaS "Dash Tráfego".
+        const systemPrompt = `Você é o assistente IA do SaaS "Dash Tráfego".
 MEMÓRIAS DO USUÁRIO: ${JSON.stringify(memories)}.
-Projetos do usuário (com suas moedas base de receita): ${JSON.stringify(projects)}.
+Projetos do usuário (com moedas base): ${JSON.stringify(projects)}.
+Categorias do usuário: ${JSON.stringify(categories)}.
 Cotação atual USD/BRL: 1 USD = ${usdBrlRate} BRL.
 
-IMPORTANTE SOBRE MOEDAS SEPARADAS:
-- Um projeto pode receber vendas em USD, mas gastar em BRL (Reais em Ads).
-- Sempre identifique "input_currency" ("BRL" ou "USD") no payload para gastos ou vendas.
-- Exemplo: "gastei 500 reais em ads no projeto Alpha" -> input_currency = "BRL", spend = 500.
+REGRAS DE EXTRAÇÃO ULTRA-PRECISA:
+1. TAREFAS/LEMBRETES (create_todo):
+   - NUNCA coloque "me lembra de" ou horários ("as 15h") dentro do "title"!
+   - Exemplo: "me lembra de ir a academia as 15h" -> title: "Ir à academia", time: "15:00", due_date: "YYYY-MM-DD", category: "Saúde / Pessoal".
+2. REGISTRAR GASTOS/MÉTRICAS (create_daily_metric / create_cash_entry):
+   - Identifique a moeda do gasto ("input_currency": "BRL" ou "USD").
+3. REGISTRAR VENDAS (create_sale):
+   - Valor bruto ("gross_amount"), método ("pix" ou "cartao"), moeda ("input_currency").
 
 Responda ESTRITAMENTE em JSON:
 {
@@ -215,9 +247,9 @@ Responda ESTRITAMENTE em JSON:
     {
       "id": "act_1",
       "type": "create_todo" | "delete_todo" | "toggle_todo" | "create_note" | "delete_note" | "create_shortcut" | "create_category" | "create_cash_entry" | "create_sale" | "create_daily_metric" | "create_project",
-      "title": "Título da ação",
-      "description": "Explicação detalhada da ação com a moeda informada e conversão se necessário",
-      "payload": { "project_id": "...", "input_currency": "BRL" | "USD", ...parâmetros... }
+      "title": "Título limpo",
+      "description": "Explicação detalhada da ação",
+      "payload": { ...parâmetros... }
     }
   ]
 }`
@@ -256,7 +288,7 @@ Responda ESTRITAMENTE em JSON:
       }
     }
 
-    // --- ENGINE MULTI-INTENÇÃO LOCAL ---
+    // --- ENGINE MULTI-INTENÇÃO LOCAL COM PARSER ULTRA-LIMPO ---
     const actions: ProposedAction[] = []
     const clauses = text.split(/(?:\.|\n|;|\b(?:e|tambem|alem disso)\b)/gi).map((c) => c.trim()).filter(Boolean)
     const todayStr = new Date().toISOString().slice(0, 10)
@@ -279,8 +311,32 @@ Responda ESTRITAMENTE em JSON:
       const isDelete = normClause.includes("excluir") || normClause.includes("deletar") || normClause.includes("remover") || normClause.includes("apagar")
       const isToggle = normClause.includes("concluir") || normClause.includes("marcar feita") || normClause.includes("finalizar") || normClause.includes("concluida")
 
-      // 1. MÉTRICAS DIÁRIAS (GASTO ADS)
-      if (normClause.includes("metrica") || normClause.includes("impressao") || normClause.includes("impressões") || normClause.includes("cliques") || (normClause.includes("gasto") && normClause.includes("ads"))) {
+      // 1. TAREFAS / LEMBRETES
+      if (normClause.includes("lembr") || normClause.includes("tarefa") || normClause.includes("to do") || normClause.includes("agendar") || normClause.includes("ir a") || normClause.includes("ir pra")) {
+        const { title, timeStr, dueDate } = cleanTaskPrompt(clause)
+
+        let category = "Outros"
+        if (normClause.includes("academia") || normClause.includes("saude") || normClause.includes("treino")) category = "Saúde / Pessoal"
+        else if (normClause.includes("casa") || normClause.includes("limpar") || normClause.includes("almoco") || normClause.includes("mercado")) category = "Casa / Pessoal"
+        else if (normClause.includes("anuncio") || normClause.includes("criativo") || normClause.includes("trafego") || normClause.includes("campanha")) category = "Tráfego"
+
+        actions.push({
+          id: `act_${Date.now()}_todo_${idx}`,
+          type: "create_todo",
+          title: `Criar Tarefa: "${title}"`,
+          description: `${timeStr ? `⏰ Horário do Lembrete: ${timeStr} · ` : ""}Categoria: ${category}`,
+          payload: {
+            title,
+            category,
+            project_id: projId,
+            due_date: dueDate,
+            time: timeStr || ""
+          }
+        })
+      }
+
+      // 2. MÉTRICAS DIÁRIAS (GASTO ADS)
+      else if (normClause.includes("metrica") || normClause.includes("impressao") || normClause.includes("impressões") || normClause.includes("cliques") || (normClause.includes("gasto") && normClause.includes("ads"))) {
         const amountMatch = clause.match(/(?:R\$|usd|\$)?\s*(\d+(?:[.,]\d{1,2})?)/i)
         const rawAmount = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : 0
 
@@ -303,14 +359,13 @@ Responda ESTRITAMENTE em JSON:
         })
       }
 
-      // 2. REGISTRAR VENDA
+      // 3. REGISTRAR VENDA
       else if (normClause.includes("venda") || normClause.includes("vendi") || normClause.includes("faturei")) {
         const amountMatch = clause.match(/(?:R\$|usd|\$)?\s*(\d+(?:[.,]\d{1,2})?)/i)
         const rawAmount = amountMatch ? parseFloat(amountMatch[1].replace(",", ".")) : 0
         const isPix = normClause.includes("pix")
         const isCard = normClause.includes("cartao") || normClause.includes("credito")
 
-        // Se o projeto for em USD e o usuário não disse "reais", assume a moeda do projeto para vendas
         const saleCurrency = detectInputCurrency(clause, projCurrency)
         const saleSymbol = currencySymbol(saleCurrency)
 
@@ -324,37 +379,6 @@ Responda ESTRITAMENTE em JSON:
             input_currency: saleCurrency,
             payment_method: isCard ? "cartao" : "pix",
             project_id: projId
-          }
-        })
-      }
-
-      // 3. TAREFAS / LEMBRETES
-      else if (normClause.includes("lembr") || normClause.includes("tarefa") || normClause.includes("to do") || normClause.includes("agendar")) {
-        let partText = clause
-          .replace(/^(?:me\s+)?lembr[aeiou](?:-me)?\s+de\s+/gi, "")
-          .replace(/^(?:criar|nova|adicionar|agendar)\s+tarefa\s+/gi, "")
-          .trim()
-
-        const { timeStr, cleanText } = extractTime(partText || clause)
-        let title = cleanText.charAt(0).toUpperCase() + cleanText.slice(1)
-        if (!title) title = clause
-
-        let category = "Outros"
-        if (normClause.includes("academia") || normClause.includes("saude")) category = "Saúde / Pessoal"
-        else if (normClause.includes("casa") || normClause.includes("limpar") || normClause.includes("almoco")) category = "Casa / Pessoal"
-        else if (normClause.includes("anuncio") || normClause.includes("criativo") || normClause.includes("trafego")) category = "Tráfego"
-
-        actions.push({
-          id: `act_${Date.now()}_todo_${idx}`,
-          type: "create_todo",
-          title: `Criar Tarefa: "${title}"`,
-          description: `${timeStr ? `⏰ Horário: ${timeStr} · ` : ""}Categoria: ${category}`,
-          payload: {
-            title,
-            category,
-            project_id: projId,
-            due_date: todayStr,
-            time: timeStr || ""
           }
         })
       }
@@ -414,22 +438,24 @@ Responda ESTRITAMENTE em JSON:
     }
 
     if (actions.length === 0) {
+      const { title, timeStr, dueDate } = cleanTaskPrompt(text)
       actions.push({
         id: `act_${Date.now()}_todo_fallback`,
         type: "create_todo",
-        title: `Criar Tarefa: "${text}"`,
+        title: `Criar Tarefa: "${title}"`,
         description: `Categoria: Outros`,
         payload: {
-          title: text,
+          title,
           category: "Outros",
           project_id: context?.projectId ?? null,
-          due_date: todayStr
+          due_date: dueDate,
+          time: timeStr || ""
         }
       })
     }
 
     return {
-      reply: `Preparei ${actions.length} ação(ões) respeitando as moedas de entrada (ex: gasto em BRL x projeto em USD). Confira abaixo:`,
+      reply: `Preparei ${actions.length} ação(ões) com títulos e horários ultra-limpos. Confira abaixo:`,
       actions,
       questions: [],
       requiresConfirmation: true,
@@ -446,8 +472,7 @@ Responda ESTRITAMENTE em JSON:
 }
 
 /**
- * Executa as ações confirmadas realizando a conversão automática de moedas (ex: input em BRL ➔ projeto em USD)
- * usando a cotação real do sistema.
+ * Executa as ações confirmadas.
  */
 export async function executeAiActions(
   actions: ProposedAction[],
@@ -511,7 +536,7 @@ export async function executeAiActions(
           }
         }
 
-        // 3. VENDAS (Com conversão de moeda do valor digitado para a moeda do projeto)
+        // 3. VENDAS
         else if (act.type === "create_sale") {
           const targetProjId = act.payload.project_id || projectId
           if (targetProjId) {
@@ -519,8 +544,6 @@ export async function executeAiActions(
             const projCurrency = p?.currency || "BRL"
             const rawGross = parseFloat(act.payload.gross_amount) || 0
             const inputCurrency = act.payload.input_currency || projCurrency
-
-            // Converte da moeda digitada para a moeda do projeto
             const finalGross = inputToProject(rawGross, inputCurrency, projCurrency, usdBrlRate)
 
             await supabase.from("sales").insert({
@@ -534,16 +557,14 @@ export async function executeAiActions(
           }
         }
 
-        // 4. MÉTRICAS DIÁRIAS (CONVERTE GASTO EM BRL/USD PARA A MOEDA BASE DO PROJETO)
+        // 4. MÉTRICAS DIÁRIAS (GASTO ADS)
         else if (act.type === "create_daily_metric") {
           const targetProjId = act.payload.project_id || projectId
           if (targetProjId) {
             const { data: p } = await supabase.from("projects").select("currency").eq("id", targetProjId).single()
             const projCurrency = p?.currency || "BRL"
             const rawSpend = parseFloat(act.payload.spend) || 0
-            const inputCurrency = act.payload.input_currency || "BRL" // Ad spend no Brasil é quase sempre BRL
-
-            // Converte da moeda digitada (ex: R$ 500) para a moeda do projeto (ex: US$ 100)
+            const inputCurrency = act.payload.input_currency || "BRL"
             const finalSpend = inputToProject(rawSpend, inputCurrency, projCurrency, usdBrlRate)
             const date = act.payload.date || new Date().toISOString().slice(0, 10)
 
