@@ -1,7 +1,4 @@
-// Resolve as credenciais do Supabase a partir dos nomes padrão OU dos nomes
-// que o projeto tem hoje (publishablekey / sescretkey). A URL do projeto entra
-// como fallback. Só a URL e a chave publishable (ambas públicas por natureza)
-// são expostas ao navegador via `env`; a chave secreta NUNCA entra aqui.
+// Resolve as credenciais do Supabase e VAPID Web Push a partir do ambiente ou fallbacks fornecidos
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
@@ -12,6 +9,19 @@ const SUPABASE_ANON_KEY =
   process.env.publishablekey ||
   ""
 
+const VAPID_PUBLIC =
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+  process.env.VAPID_PUBLIC_KEY ||
+  "BLnF17klfFXsfCmayro8yc8HI7xbtZ_iQwi565pIC8WN1-p9-kJ200UrqFR4YUUx83rirg4E2-AeEsQsAUnBFJs"
+
+const VAPID_PRIVATE =
+  process.env.VAPID_PRIVATE_KEY ||
+  "uogiZO9FeL7LAZ-jvPdf79vi54LvmdCIW1zuz_PPlyY"
+
+const CRON_SECRET =
+  process.env.CRON_SECRET ||
+  "35223281tT!"
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: { root: import.meta.dirname },
@@ -19,6 +29,10 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_SUPABASE_URL: SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: VAPID_PUBLIC,
+    VAPID_PUBLIC_KEY: VAPID_PUBLIC,
+    VAPID_PRIVATE_KEY: VAPID_PRIVATE,
+    CRON_SECRET: CRON_SECRET,
   },
   async headers() {
     return [

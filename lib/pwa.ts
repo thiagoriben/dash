@@ -27,11 +27,61 @@ export function notificationsSupported(): boolean {
   return typeof window !== "undefined" && "Notification" in window
 }
 
+import { savePushSubscription } from "@/app/actions/push"
+
+const VAPID_PUBLIC_KEY =
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+  "BLnF17klfFXsfCmayro8yc8HI7xbtZ_iQwi565pIC8WN1-p9-kJ200UrqFR4YUUx83rirg4E2-AeEsQsAUnBFJs"
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray
+}
+
+export async function subscribeUserToPush(): Promise<boolean> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return false
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready
+    if (!reg.pushManager) return false
+
+    let sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      const convertedKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey,
+      })
+    }
+    if (sub) {
+      await savePushSubscription(sub.toJSON() as any)
+      return true
+    }
+  } catch (err) {
+    console.warn("Push subscription error:", err)
+  }
+  return false
+}
+
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (!notificationsSupported()) return "denied"
-  if (Notification.permission === "granted") return "granted"
+  if (Notification.permission === "granted") {
+    void subscribeUserToPush()
+    return "granted"
+  }
   try {
-    return await Notification.requestPermission()
+    const perm = await Notification.requestPermission()
+    if (perm === "granted") {
+      void subscribeUserToPush()
+    }
+    return perm
   } catch {
     return "denied"
   }

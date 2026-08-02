@@ -18,7 +18,7 @@ import { RowActions } from "@/components/row-actions"
 import { cn } from "@/lib/utils"
 import type { TodoItem, Profile, ShortcutCategory } from "@/lib/types"
 import { createTodo, updateTodo, toggleTodo, archiveTodo, deleteTodo } from "@/app/actions/todo"
-import { scheduleReminders, type ScheduledReminder } from "@/lib/pwa"
+import { scheduleReminders, subscribeUserToPush, type ScheduledReminder } from "@/lib/pwa"
 
 /** Mapa de lembretes: id da tarefa -> { time: "HH:MM", lead: minutos antes }. */
 export type ReminderMap = Record<string, { time?: string; lead?: number }>
@@ -102,14 +102,14 @@ export function TodoBoard({
 }) {
   const [pending, startTransition] = React.useTransition()
 
-  // Agenda notificações locais das tarefas com horário definido (aba precisa estar aberta).
-  // Namespace por escopo para não apagar os lembretes de outros quadros na mesma página.
+  // Agenda notificações locais (se aberta a aba) e garante inscrição Web Push VAPID no celular (PWA em segundo plano).
   const reminderNs = `todos:${projectId ?? "pessoal"}`
   React.useEffect(() => {
     if (!notifEnabled) {
       scheduleReminders([], reminderNs)
       return
     }
+    void subscribeUserToPush()
     const list: ScheduledReminder[] = []
     for (const t of todos) {
       if (t.done || t.archived || !t.due_date) continue

@@ -49,7 +49,27 @@ self.addEventListener("fetch", (event) => {
   )
 })
 
-// Mensagem vinda da página para disparar uma notificação (lembrete de tarefa).
+// Evento Push em segundo plano (enviado pelo servidor Web Push VAPID mesmo com o PWA fechado no celular).
+self.addEventListener("push", (event) => {
+  if (!event.data) return
+  try {
+    const payload = event.data.json()
+    const title = payload.title || "Lembrete de Tarefa"
+    const options = {
+      body: payload.body || "",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      vibrate: [100, 50, 100],
+      tag: payload.tag || undefined,
+      data: { url: payload.url || "/organizacao/tarefas" },
+    }
+    event.waitUntil(self.registration.showNotification(title, options))
+  } catch (e) {
+    console.error("Erro ao processar evento push:", e)
+  }
+})
+
+// Mensagem vinda da página para disparar uma notificação (lembrete de tarefa com a aba aberta).
 self.addEventListener("message", (event) => {
   const data = event.data
   if (!data || data.type !== "notify") return
