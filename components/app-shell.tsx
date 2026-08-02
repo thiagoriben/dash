@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { setSidebarCollapsed } from "@/app/actions/projects"
 import { PrivacyProvider } from "@/components/privacy"
+import { AiCopilot } from "@/components/ai-copilot"
 
 type Ctx = { collapsed: boolean; toggle: () => void }
 const SidebarCtx = createContext<Ctx>({ collapsed: false, toggle: () => {} })
@@ -57,6 +58,7 @@ export function AppShell({
               {children}
             </main>
           </div>
+          <AiCopilot />
         </div>
       </PrivacyProvider>
     </SidebarCtx.Provider>
